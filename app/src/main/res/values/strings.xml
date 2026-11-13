@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Tasbih 3D</string>
+    <string name="app_title">3D تسبیح کاؤنٹر</string>
+    <string name="developer_name">Developer: Usama Memon</string>
+    <string name="developer_phone">0310-3205422</string>
+    <string name="widget_small_name">Tasbih Compact Widget</string>
+    <string name="widget_large_name">Tasbih Detailed Widget</string>
+</resources>
