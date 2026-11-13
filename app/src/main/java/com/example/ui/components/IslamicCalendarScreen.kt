@@ -243,6 +243,29 @@ fun IslamicCalendarScreen(
                     }
                 }
             }
+
+            // Bottom Wapas Button
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 560.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Glass3DButton(
+                    onClick = onBack,
+                    modifier = Modifier.fillMaxWidth(),
+                    isPrimaryGold = false,
+                    height = 48.dp,
+                    testTag = "calendar_wapas_button"
+                ) {
+                    Text(
+                        text = "🔄 Wapas",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = GoldBright
+                    )
+                }
+            }
         }
     }
 }
@@ -639,6 +662,61 @@ private fun SindhiHijriCalendarContent(
                                 color = GoldPrimary,
                                 modifier = Modifier.padding(top = 2.dp)
                             )
+                        }
+                    }
+                }
+            }
+
+            // Upcoming Important Islamic Days (Live Days Remaining Countdown)
+            GlassCalendarCard {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "✨ Aane Wale Important Days",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = GoldBright,
+                        modifier = Modifier.padding(bottom = 10.dp)
+                    )
+
+                    val upcomingDays = remember(hilalOffsetDays) {
+                        IslamicCalendarEngine.getUpcomingImportantDays(hilalOffsetDays)
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        upcomingDays.forEach { item ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.White.copy(alpha = 0.06f))
+                                    .clickable {
+                                        displayedMonth = item.hijriMonth
+                                        selectedCell = null
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${item.emoji} ${item.title}",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = IvoryText
+                                    )
+                                    Text(
+                                        text = "${item.hijriDateLabel} • ${IslamicCalendarEngine.formatGregorianFull(item.gregorianDate)}",
+                                        fontSize = 11.sp,
+                                        color = IvorySubtle
+                                    )
+                                }
+                                Text(
+                                    text = if (item.daysRemaining == 0) "Aaj! ✨" else "${item.daysRemaining} din baqi",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = GoldBright
+                                )
+                            }
                         }
                     }
                 }

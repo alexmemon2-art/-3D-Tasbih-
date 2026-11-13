@@ -72,6 +72,19 @@
                 android:resource="@xml/tasbih_widget_large_info" />
         </receiver>
 
+        <receiver
+            android:name=".widget.TasbihQuickWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_quick_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.ACTION_WIDGET_INCREMENT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_tasbih_info" />
+        </receiver>
+
     </application>
 
 </manifest>

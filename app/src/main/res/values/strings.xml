@@ -5,4 +5,5 @@
     <string name="developer_phone">0310-3205422</string>
     <string name="widget_small_name">Tasbih Compact Widget</string>
     <string name="widget_large_name">Tasbih Detailed Widget</string>
+    <string name="widget_quick_name">Quick Tasbih Widget</string>
 </resources>

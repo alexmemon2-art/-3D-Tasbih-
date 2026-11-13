@@ -2,6 +2,7 @@ package com.example
 
 import com.example.calendar.GregorianDate
 import com.example.calendar.IslamicCalendarEngine
+import com.example.data.NightModeLogic
 import com.example.model.AsmaUlHusnaData
 import com.example.model.DailyBaatProvider
 import com.example.model.DhikrLevels
@@ -164,5 +165,44 @@ class IslamicCalendarEngineTest {
         assertEquals((1..6).toList(), NamazGuideData.steps.map { it.stepNumber })
         assertTrue(NamazGuideData.steps.all { it.title.isNotBlank() && it.instructions.isNotEmpty() })
         assertEquals(5, NamazGuideData.rakaatSummary.size)
+    }
+
+    @Test
+    fun upcomingImportantIslamicDaysReturnsSortedValidEntries() {
+        val upcoming = IslamicCalendarEngine.getUpcomingImportantDays(hilalOffsetDays = 0)
+        assertEquals(8, upcoming.size)
+        for (i in 0 until upcoming.size - 1) {
+            assertTrue(
+                "Expected ascending daysRemaining, got ${upcoming[i].daysRemaining} before ${upcoming[i + 1].daysRemaining}",
+                upcoming[i].daysRemaining <= upcoming[i + 1].daysRemaining
+            )
+        }
+        assertTrue(
+            upcoming.all {
+                it.daysRemaining >= 0 &&
+                    it.title.isNotBlank() &&
+                    it.hijriDateLabel.isNotBlank() &&
+                    it.gregorianDate.year >= 2024 &&
+                    IslamicCalendarEngine.formatGregorianFull(it.gregorianDate).isNotBlank()
+            }
+        )
+    }
+
+    @Test
+    fun nightModeLogicRespectsAutoWindowAndManualOverride() {
+        // Auto night window is 21:00..05:59
+        assertTrue(NightModeLogic.isAutoNightWindow(21))
+        assertTrue(NightModeLogic.isAutoNightWindow(23))
+        assertTrue(NightModeLogic.isAutoNightWindow(0))
+        assertTrue(NightModeLogic.isAutoNightWindow(5))
+        assertTrue(!NightModeLogic.isAutoNightWindow(6))
+        assertTrue(!NightModeLogic.isAutoNightWindow(14))
+        assertTrue(!NightModeLogic.isAutoNightWindow(20))
+
+        // Auto active only during night hours unless manual override is enabled
+        assertTrue(NightModeLogic.isEffectiveNightMode(autoEnabled = true, manualEnabled = false, hourOfDay = 22))
+        assertTrue(!NightModeLogic.isEffectiveNightMode(autoEnabled = true, manualEnabled = false, hourOfDay = 12))
+        assertTrue(NightModeLogic.isEffectiveNightMode(autoEnabled = false, manualEnabled = true, hourOfDay = 12))
+        assertTrue(!NightModeLogic.isEffectiveNightMode(autoEnabled = false, manualEnabled = false, hourOfDay = 22))
     }
 }

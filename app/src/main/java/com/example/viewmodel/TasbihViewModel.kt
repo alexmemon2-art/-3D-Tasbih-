@@ -2,7 +2,9 @@ package com.example.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.audio.AudioFeedback
+import com.example.data.NightModeLogic
 import com.example.data.TasbihPreferences
 import com.example.haptic.HapticHelper
 import com.example.model.AppSettings
@@ -21,10 +23,13 @@ import com.example.model.SpecialDhikrsData
 import com.example.notifications.TasbihReminderScheduler
 import com.example.ui.components.CalendarTab
 import com.example.widget.TasbihWidgetUpdater
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -39,7 +44,9 @@ enum class SubScreen {
     DAILY_REMINDER,
     HAJAT_AZKAR,
     SPECIAL_DHIKR,
-    NAMAZ_GUIDE
+    NAMAZ_GUIDE,
+    CHALLENGES,
+    NIGHT_TIMER
 }
 
 data class TasbihUiState(
@@ -71,13 +78,23 @@ data class TasbihUiState(
     val hilalOffsetDays: Int = 0,
     val selectedCityName: String = "Hyderabad",
     val wallpaperIndex: Int = 0,
-    val tasbihFatimaCount: Int = 0
+    val tasbihFatimaCount: Int = 0,
+    val weeklyChallengeTarget: Int = 5000,
+    val todayHadeesDone: Boolean = false,
+    val autoNightMode: Boolean = false,
+    val manualNightMode: Boolean = false,
+    val isNightModeEffective: Boolean = false,
+    val timerDurationMinutes: Int = 10,
+    val timerRemainingMillis: Long = 10 * 60_000L,
+    val isTimerRunning: Boolean = false,
+    val isTimerCompleted: Boolean = false
 )
 
 class TasbihViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = TasbihPreferences(application)
     private val audioFeedback = AudioFeedback(application)
     private val hapticHelper = HapticHelper(application)
+    private var timerJob: Job? = null
 
     private val _uiState = MutableStateFlow(TasbihUiState())
     val uiState: StateFlow<TasbihUiState> = _uiState.asStateFlow()
@@ -118,6 +135,11 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
         val currentCount = prefs.getCurrentSessionDhikrCount()
         val hilalOffset = prefs.getHilalOffset()
         val cityName = prefs.getSelectedCityName()
+        val weeklyChallengeTarget = prefs.getWeeklyChallengeTarget()
+        val todayHadeesDone = prefs.isTodayHadeesChallengeDone()
+        val autoNight = prefs.getAutoNightModeEnabled()
+        val manualNight = prefs.getManualNightModeEnabled()
+        val nightEffective = NightModeLogic.isEffectiveNightMode(autoNight, manualNight)
 
         _uiState.update {
             it.copy(
@@ -138,7 +160,12 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
                 settings = settings,
                 reminderSettings = reminders,
                 hilalOffsetDays = hilalOffset,
-                selectedCityName = cityName
+                selectedCityName = cityName,
+                weeklyChallengeTarget = weeklyChallengeTarget,
+                todayHadeesDone = todayHadeesDone,
+                autoNightMode = autoNight,
+                manualNightMode = manualNight,
+                isNightModeEffective = nightEffective
             )
         }
     }
@@ -497,6 +524,36 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update { it.copy(settings = updated) }
     }
 
+    fun updateWeeklyChallengeTarget(target: Int) {
+        val valid = target.coerceIn(500, 100000)
+        prefs.saveWeeklyChallengeTarget(valid)
+        _uiState.update { it.copy(weeklyChallengeTarget = valid) }
+    }
+
+    fun toggleTodayHadeesChallengeDone() {
+        val nextDone = !_uiState.value.todayHadeesDone
+        prefs.setTodayHadeesChallengeDone(nextDone)
+        _uiState.update { it.copy(todayHadeesDone = nextDone) }
+    }
+
+    fun startChallengeDhikr(dhikrId: String, target: Int) {
+        val state = _uiState.value
+        val baseDhikr = state.dhikrs.find { it.id == dhikrId }
+            ?: DefaultDhikrs.list.find { it.id == dhikrId }
+            ?: state.currentDhikr
+        val updatedDhikr = baseDhikr.copy(target = target.coerceIn(1, 10000))
+        prefs.saveActiveDhikrId(updatedDhikr.id)
+        prefs.saveCurrentSessionDhikrCount(0)
+        _uiState.update {
+            it.copy(
+                currentDhikr = updatedDhikr,
+                count = 0,
+                activeSubScreen = null
+            )
+        }
+        TasbihWidgetUpdater.updateAllWidgets(getApplication())
+    }
+
     fun updateReminderSettings(newReminders: ReminderSettings) {
         prefs.saveReminderSettings(newReminders)
         _uiState.update { it.copy(reminderSettings = newReminders) }
@@ -581,8 +638,100 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
         TasbihReminderScheduler.scheduleAll(getApplication(), _uiState.value.reminderSettings, cityName)
     }
 
+    fun toggleAutoNightMode(enabled: Boolean) {
+        prefs.saveAutoNightModeEnabled(enabled)
+        _uiState.update { state ->
+            state.copy(
+                autoNightMode = enabled,
+                isNightModeEffective = NightModeLogic.isEffectiveNightMode(enabled, state.manualNightMode)
+            )
+        }
+    }
+
+    fun toggleManualNightMode(enabled: Boolean) {
+        prefs.saveManualNightModeEnabled(enabled)
+        _uiState.update { state ->
+            state.copy(
+                manualNightMode = enabled,
+                isNightModeEffective = NightModeLogic.isEffectiveNightMode(state.autoNightMode, enabled)
+            )
+        }
+    }
+
+    fun selectTimerMinutes(minutes: Int) {
+        val valid = minutes.coerceIn(1, 120)
+        timerJob?.cancel()
+        _uiState.update {
+            it.copy(
+                timerDurationMinutes = valid,
+                timerRemainingMillis = valid * 60_000L,
+                isTimerRunning = false,
+                isTimerCompleted = false
+            )
+        }
+    }
+
+    fun startDhikrTimer() {
+        val current = _uiState.value
+        if (current.isTimerRunning) return
+        val startMillis = if (current.timerRemainingMillis <= 0L || current.isTimerCompleted) {
+            current.timerDurationMinutes.coerceAtLeast(1) * 60_000L
+        } else {
+            current.timerRemainingMillis
+        }
+
+        _uiState.update {
+            it.copy(
+                timerRemainingMillis = startMillis,
+                isTimerRunning = true,
+                isTimerCompleted = false
+            )
+        }
+
+        timerJob?.cancel()
+        timerJob = viewModelScope.launch {
+            var remaining = startMillis
+            while (remaining > 0L) {
+                delay(1000L)
+                remaining = (remaining - 1000L).coerceAtLeast(0L)
+                _uiState.update { it.copy(timerRemainingMillis = remaining) }
+            }
+            val latestSettings = _uiState.value.settings
+            if (latestSettings.soundEnabled) {
+                audioFeedback.playCompletionChime(latestSettings.completionSoundStyle)
+            }
+            if (latestSettings.vibrationEnabled) {
+                hapticHelper.vibrateTargetReached()
+            }
+            _uiState.update {
+                it.copy(
+                    timerRemainingMillis = 0L,
+                    isTimerRunning = false,
+                    isTimerCompleted = true
+                )
+            }
+        }
+    }
+
+    fun pauseDhikrTimer() {
+        timerJob?.cancel()
+        _uiState.update { it.copy(isTimerRunning = false) }
+    }
+
+    fun stopDhikrTimer() {
+        timerJob?.cancel()
+        _uiState.update {
+            it.copy(
+                timerRemainingMillis = 0L,
+                isTimerRunning = false,
+                isTimerCompleted = false
+            )
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
+        timerJob?.cancel()
         audioFeedback.release()
     }
 }

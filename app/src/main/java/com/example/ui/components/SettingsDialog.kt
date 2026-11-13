@@ -93,6 +93,8 @@ fun SettingsDialog(
     onOpenHajatAzkar: () -> Unit = {},
     onOpenSpecialDhikr: () -> Unit = {},
     onOpenNamazGuide: () -> Unit = {},
+    onOpenChallenges: () -> Unit = {},
+    onOpenNightTimer: () -> Unit = {},
     onSaveSettings: (AppSettings) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -331,6 +333,40 @@ fun SettingsDialog(
                 ) {
                     Text(
                         text = "🕌 Namaz Parhne Ka Tareeqa (Guide)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = GoldBright
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Glass3DButton(
+                    onClick = onOpenChallenges,
+                    modifier = Modifier.fillMaxWidth(),
+                    isPrimaryGold = false,
+                    height = 46.dp,
+                    testTag = "settings_challenges_btn"
+                ) {
+                    Text(
+                        text = "🎯 Weekly & Daily Dhikr Challenges",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = GoldBright
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Glass3DButton(
+                    onClick = onOpenNightTimer,
+                    modifier = Modifier.fillMaxWidth(),
+                    isPrimaryGold = false,
+                    height = 46.dp,
+                    testTag = "settings_night_timer_btn"
+                ) {
+                    Text(
+                        text = "🌙 Auto Night Mode & Dhikr Timer",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = GoldBright
@@ -616,7 +652,7 @@ fun SettingsDialog(
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Glass3DPill(
                                 selected = false,
@@ -633,7 +669,24 @@ fun SettingsDialog(
                                 modifier = Modifier.weight(1f),
                                 testTag = "pin_small_widget_button"
                             ) {
-                                Text("Small (2x1)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GoldBright)
+                                Text("Compact", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GoldBright)
+                            }
+                            Glass3DPill(
+                                selected = false,
+                                onClick = {
+                                    val requested = TasbihWidgetUpdater.requestPinQuickWidget(context)
+                                    if (!requested) {
+                                        Toast.makeText(
+                                            context,
+                                            "Long-press Home Screen -> Widgets -> Quick Tasbih Widget",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                testTag = "pin_quick_widget_button"
+                            ) {
+                                Text("Quick 2x2", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GoldBright)
                             }
                             Glass3DPill(
                                 selected = true,
@@ -650,7 +703,7 @@ fun SettingsDialog(
                                 modifier = Modifier.weight(1f),
                                 testTag = "pin_large_widget_button"
                             ) {
-                                Text("Large (4x2)", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = EmeraldDeepDark)
+                                Text("Large", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = EmeraldDeepDark)
                             }
                         }
                     }

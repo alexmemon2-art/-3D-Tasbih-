@@ -17,6 +17,16 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+object NightModeLogic {
+    fun isAutoNightWindow(hourOfDay: Int): Boolean = hourOfDay >= 21 || hourOfDay < 6
+
+    fun isEffectiveNightMode(
+        autoEnabled: Boolean,
+        manualEnabled: Boolean,
+        hourOfDay: Int = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+    ): Boolean = manualEnabled || (autoEnabled && isAutoNightWindow(hourOfDay))
+}
+
 class TasbihPreferences(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("tasbih_3d_prefs", Context.MODE_PRIVATE)
@@ -326,6 +336,35 @@ class TasbihPreferences(context: Context) {
         prefs.edit().putString(KEY_SELECTED_CITY, name).apply()
     }
 
+    fun getWeeklyChallengeTarget(): Int =
+        prefs.getInt(KEY_WEEKLY_CHALLENGE_TARGET, 5000).coerceIn(500, 100000)
+
+    fun saveWeeklyChallengeTarget(target: Int) {
+        prefs.edit().putInt(KEY_WEEKLY_CHALLENGE_TARGET, target.coerceIn(500, 100000)).apply()
+    }
+
+    fun isTodayHadeesChallengeDone(): Boolean {
+        val saved = prefs.getString(KEY_HADEES_CHALLENGE_DATE, "") ?: ""
+        return saved == getTodayDate()
+    }
+
+    fun setTodayHadeesChallengeDone(done: Boolean) {
+        val value = if (done) getTodayDate() else ""
+        prefs.edit().putString(KEY_HADEES_CHALLENGE_DATE, value).apply()
+    }
+
+    fun getAutoNightModeEnabled(): Boolean = prefs.getBoolean(KEY_AUTO_NIGHT_ENABLED, false)
+
+    fun saveAutoNightModeEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_NIGHT_ENABLED, enabled).apply()
+    }
+
+    fun getManualNightModeEnabled(): Boolean = prefs.getBoolean(KEY_MANUAL_NIGHT_ENABLED, false)
+
+    fun saveManualNightModeEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_MANUAL_NIGHT_ENABLED, enabled).apply()
+    }
+
     companion object {
         private const val KEY_SAVED_DATE = "saved_date"
         private const val KEY_TODAY_COUNT = "today_count"
@@ -361,5 +400,9 @@ class TasbihPreferences(context: Context) {
         private const val KEY_HISTORY = "history"
         private const val KEY_HILAL_OFFSET = "hilal_offset"
         private const val KEY_SELECTED_CITY = "selected_city"
+        private const val KEY_WEEKLY_CHALLENGE_TARGET = "weekly_challenge_target"
+        private const val KEY_HADEES_CHALLENGE_DATE = "hadees_challenge_date"
+        private const val KEY_AUTO_NIGHT_ENABLED = "auto_night_enabled"
+        private const val KEY_MANUAL_NIGHT_ENABLED = "manual_night_enabled"
     }
 }

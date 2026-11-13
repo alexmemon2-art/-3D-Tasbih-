@@ -28,14 +28,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.NightsStay
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import java.util.Locale
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +61,7 @@ import com.example.ui.components.CalendarTab
 import com.example.ui.components.CompletionDialog
 import com.example.ui.components.CounterDisplay
 import com.example.ui.components.DailyReminderScreen
+import com.example.ui.components.DhikrChallengesScreen
 import com.example.ui.components.DhikrFazilatScreen
 import com.example.ui.components.DhikrSelector
 import com.example.ui.components.ExitConfirmScreen
@@ -67,8 +71,10 @@ import com.example.ui.components.HajatAzkarScreen
 import com.example.ui.components.HistorySection
 import com.example.ui.components.HistoryStatsScreen
 import com.example.ui.components.IslamicCalendarScreen
+import com.example.ui.components.LocalNightModeActive
 import com.example.ui.components.MasnoonDuasScreen
 import com.example.ui.components.NamazGuideScreen
+import com.example.ui.components.NightModeTimerScreen
 import com.example.ui.components.PrayerQiblaScreen
 import com.example.ui.components.SettingsDialog
 import com.example.ui.components.SpecialDhikrScreen
@@ -131,16 +137,19 @@ fun TasbihScreen(
         uiState.activeSubScreen == SubScreen.HAJAT_AZKAR -> ScreenMode.HAJAT_AZKAR
         uiState.activeSubScreen == SubScreen.SPECIAL_DHIKR -> ScreenMode.SPECIAL_DHIKR
         uiState.activeSubScreen == SubScreen.NAMAZ_GUIDE -> ScreenMode.NAMAZ_GUIDE
+        uiState.activeSubScreen == SubScreen.CHALLENGES -> ScreenMode.CHALLENGES
+        uiState.activeSubScreen == SubScreen.NIGHT_TIMER -> ScreenMode.NIGHT_TIMER
         uiState.showCalendarScreen -> ScreenMode.CALENDAR
         uiState.showStartingScreen -> ScreenMode.STARTING
         else -> ScreenMode.MAIN
     }
 
-    AnimatedContent(
-        targetState = currentMode,
-        transitionSpec = { fadeIn() togetherWith fadeOut() },
-        label = "screen_mode_transition"
-    ) { mode ->
+    CompositionLocalProvider(LocalNightModeActive provides uiState.isNightModeEffective) {
+        AnimatedContent(
+            targetState = currentMode,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "screen_mode_transition"
+        ) { mode ->
         when (mode) {
             ScreenMode.STARTING -> {
                 StartSplashScreen(
@@ -244,6 +253,39 @@ fun TasbihScreen(
                     onBack = { viewModel.closeSubScreen() }
                 )
             }
+            ScreenMode.CHALLENGES -> {
+                DhikrChallengesScreen(
+                    wallpaperIndex = uiState.wallpaperIndex,
+                    weekCount = uiState.weekCount,
+                    todayCount = uiState.todayCount,
+                    weeklyTarget = uiState.weeklyChallengeTarget,
+                    todayHadeesDone = uiState.todayHadeesDone,
+                    onUpdateWeeklyTarget = { viewModel.updateWeeklyChallengeTarget(it) },
+                    onStartChallengeDhikr = { dhikrId, target -> viewModel.startChallengeDhikr(dhikrId, target) },
+                    onToggleHadeesChallengeDone = { viewModel.toggleTodayHadeesChallengeDone() },
+                    onOpenDailyBaat = { viewModel.openSubScreen(SubScreen.DAILY_REMINDER) },
+                    onBack = { viewModel.closeSubScreen() }
+                )
+            }
+            ScreenMode.NIGHT_TIMER -> {
+                NightModeTimerScreen(
+                    wallpaperIndex = uiState.wallpaperIndex,
+                    autoNightMode = uiState.autoNightMode,
+                    manualNightMode = uiState.manualNightMode,
+                    isNightModeEffective = uiState.isNightModeEffective,
+                    timerDurationMinutes = uiState.timerDurationMinutes,
+                    timerRemainingMillis = uiState.timerRemainingMillis,
+                    isTimerRunning = uiState.isTimerRunning,
+                    isTimerCompleted = uiState.isTimerCompleted,
+                    onToggleAutoNightMode = { viewModel.toggleAutoNightMode(it) },
+                    onToggleManualNightMode = { viewModel.toggleManualNightMode(it) },
+                    onSelectTimerMinutes = { viewModel.selectTimerMinutes(it) },
+                    onStartTimer = { viewModel.startDhikrTimer() },
+                    onPauseTimer = { viewModel.pauseDhikrTimer() },
+                    onStopTimer = { viewModel.stopDhikrTimer() },
+                    onBack = { viewModel.closeSubScreen() }
+                )
+            }
             ScreenMode.EXIT -> {
                 ExitConfirmScreen(
                     sessionCount = uiState.sessionCount,
@@ -300,6 +342,45 @@ fun TasbihScreen(
                                     onOpenExit = { viewModel.showExit(true) }
                                 )
 
+                                if (uiState.isTimerRunning || uiState.isTimerCompleted || uiState.isNightModeEffective) {
+                                    val totalSec = ((uiState.timerRemainingMillis + 999L) / 1000L).coerceAtLeast(0L)
+                                    val tMins = (totalSec / 60L).toInt()
+                                    val tSecs = (totalSec % 60L).toInt()
+                                    val timerLabel = when {
+                                        uiState.isTimerCompleted -> "⏱️ Timer Complete! ✅"
+                                        uiState.isTimerRunning -> String.format(Locale.US, "⏱️ %02d:%02d", tMins, tSecs)
+                                        else -> "🌙 Night Mode On"
+                                    }
+                                    Glass3DPill(
+                                        selected = uiState.isTimerCompleted,
+                                        onClick = { viewModel.openSubScreen(SubScreen.NIGHT_TIMER) },
+                                        modifier = Modifier.padding(bottom = 6.dp),
+                                        testTag = "home_night_timer_pill"
+                                    ) {
+                                        Icon(
+                                            imageVector = if (uiState.isTimerRunning || uiState.isTimerCompleted) {
+                                                Icons.Default.Timer
+                                            } else {
+                                                Icons.Default.NightsStay
+                                            },
+                                            contentDescription = timerLabel,
+                                            tint = if (uiState.isTimerCompleted) EmeraldDeepDark else GoldBright,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (uiState.isNightModeEffective && (uiState.isTimerRunning || uiState.isTimerCompleted)) {
+                                                "$timerLabel • 🌙 Night"
+                                            } else {
+                                                timerLabel
+                                            },
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (uiState.isTimerCompleted) EmeraldDeepDark else GoldBright
+                                        )
+                                    }
+                                }
+
                                 // 3D Interactive Rotating Tasbih Beads Ring
                                 Tasbih3DCanvas(
                                     count = uiState.count,
@@ -347,6 +428,8 @@ fun TasbihScreen(
                                     onOpenHajatAzkar = { viewModel.openSubScreen(SubScreen.HAJAT_AZKAR) },
                                     onOpenSpecialDhikr = { viewModel.openSubScreen(SubScreen.SPECIAL_DHIKR) },
                                     onOpenNamazGuide = { viewModel.openSubScreen(SubScreen.NAMAZ_GUIDE) },
+                                    onOpenChallenges = { viewModel.openSubScreen(SubScreen.CHALLENGES) },
+                                    onOpenNightTimer = { viewModel.openSubScreen(SubScreen.NIGHT_TIMER) },
                                     onOpenSettings = { viewModel.showSettings(true) },
                                     modifier = Modifier.padding(horizontal = 16.dp)
                                 )
@@ -440,6 +523,8 @@ fun TasbihScreen(
                             onOpenHajatAzkar = { viewModel.openSubScreen(SubScreen.HAJAT_AZKAR) },
                             onOpenSpecialDhikr = { viewModel.openSubScreen(SubScreen.SPECIAL_DHIKR) },
                             onOpenNamazGuide = { viewModel.openSubScreen(SubScreen.NAMAZ_GUIDE) },
+                            onOpenChallenges = { viewModel.openSubScreen(SubScreen.CHALLENGES) },
+                            onOpenNightTimer = { viewModel.openSubScreen(SubScreen.NIGHT_TIMER) },
                             onSaveSettings = { viewModel.updateSettings(it) },
                             onDismiss = { viewModel.showSettings(false) }
                         )
@@ -464,6 +549,7 @@ fun TasbihScreen(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -478,6 +564,8 @@ private fun IslamicToolsHubCard(
     onOpenHajatAzkar: () -> Unit,
     onOpenSpecialDhikr: () -> Unit,
     onOpenNamazGuide: () -> Unit,
+    onOpenChallenges: () -> Unit,
+    onOpenNightTimer: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -644,6 +732,31 @@ private fun IslamicToolsHubCard(
                 }
             }
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                com.example.ui.components.Glass3DButton(
+                    onClick = onOpenChallenges,
+                    modifier = Modifier.weight(1f),
+                    isPrimaryGold = true,
+                    shape = RoundedCornerShape(18.dp),
+                    testTag = "hub_challenges_button"
+                ) {
+                    Text("🎯 Challenges", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = EmeraldDeepDark)
+                }
+
+                com.example.ui.components.Glass3DButton(
+                    onClick = onOpenNightTimer,
+                    modifier = Modifier.weight(1f),
+                    isPrimaryGold = false,
+                    shape = RoundedCornerShape(18.dp),
+                    testTag = "hub_night_timer_button"
+                ) {
+                    Text("🌙 Night & Timer", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GoldLight)
+                }
+            }
+
             com.example.ui.components.Glass3DButton(
                 onClick = onOpenSettings,
                 modifier = Modifier.fillMaxWidth(),
@@ -651,7 +764,7 @@ private fun IslamicToolsHubCard(
                 shape = RoundedCornerShape(18.dp),
                 testTag = "hub_settings_button"
             ) {
-                Text("⚙️ Settings & Themes (ترتیبات)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GoldBright)
+                Text("⚙️ Settings, Widgets & Themes", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GoldBright)
             }
         }
     }
@@ -794,5 +907,7 @@ private enum class ScreenMode {
     HAJAT_AZKAR,
     SPECIAL_DHIKR,
     NAMAZ_GUIDE,
+    CHALLENGES,
+    NIGHT_TIMER,
     EXIT
 }

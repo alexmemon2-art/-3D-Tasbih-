@@ -101,6 +101,27 @@ object TasbihWidgetUpdater {
             views.setOnClickPendingIntent(R.id.widget_large_reset_btn, largeResetPending)
             manager.updateAppWidget(id, views)
         }
+
+        // Update Quick Tasbih Widgets (2x2 tap card)
+        val quickIncIntent = Intent(context, TasbihQuickWidgetProvider::class.java).apply {
+            action = ACTION_INCREMENT
+        }
+        val quickIncPending = PendingIntent.getBroadcast(
+            context,
+            505,
+            quickIncIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val quickIds = manager.getAppWidgetIds(ComponentName(context, TasbihQuickWidgetProvider::class.java))
+        for (id in quickIds) {
+            val views = RemoteViews(context.packageName, R.layout.widget_quick_tasbih)
+            views.setTextViewText(R.id.widget_quick_dhikr, activeDhikr.arabic)
+            views.setTextViewText(R.id.widget_quick_counter, count.toString())
+            views.setTextViewText(R.id.widget_quick_hint, "Tap to count ($count/$target)")
+            views.setOnClickPendingIntent(R.id.widget_quick_root, quickIncPending)
+            views.setOnClickPendingIntent(R.id.widget_quick_open_app, openPending)
+            manager.updateAppWidget(id, views)
+        }
     }
 
     fun handleWidgetIncrement(context: Context) {
@@ -161,6 +182,17 @@ object TasbihWidgetUpdater {
         }
         return false
     }
+
+    fun requestPinQuickWidget(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = AppWidgetManager.getInstance(context)
+            if (manager.isRequestPinAppWidgetSupported) {
+                val provider = ComponentName(context, TasbihQuickWidgetProvider::class.java)
+                return manager.requestPinAppWidget(provider, null, null)
+            }
+        }
+        return false
+    }
 }
 
 class TasbihSmallWidgetProvider : AppWidgetProvider() {
@@ -186,6 +218,19 @@ class TasbihLargeWidgetProvider : AppWidgetProvider() {
         when (intent.action) {
             TasbihWidgetUpdater.ACTION_INCREMENT -> TasbihWidgetUpdater.handleWidgetIncrement(context)
             TasbihWidgetUpdater.ACTION_RESET -> TasbihWidgetUpdater.handleWidgetReset(context)
+        }
+    }
+}
+
+class TasbihQuickWidgetProvider : AppWidgetProvider() {
+    override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        TasbihWidgetUpdater.updateAllWidgets(context)
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == TasbihWidgetUpdater.ACTION_INCREMENT) {
+            TasbihWidgetUpdater.handleWidgetIncrement(context)
         }
     }
 }

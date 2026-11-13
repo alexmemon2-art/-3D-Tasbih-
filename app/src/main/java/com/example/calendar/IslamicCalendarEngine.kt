@@ -32,6 +32,16 @@ data class IslamicEvent(
     val isMajorEidOrNight: Boolean = true
 )
 
+data class UpcomingIslamicDay(
+    val emoji: String,
+    val title: String,
+    val hijriMonth: Int,
+    val hijriDay: Int,
+    val hijriDateLabel: String,
+    val gregorianDate: GregorianDate,
+    val daysRemaining: Int
+)
+
 data class CalendarDayCell(
     val hijri: HijriDate,
     val gregorian: GregorianDate,
@@ -576,5 +586,49 @@ object IslamicCalendarEngine {
             start.month != end.month -> "$sMonth – $eMonth ${end.year}"
             else -> "$sMonth ${end.year}"
         }
+    }
+
+    fun getUpcomingImportantDays(hilalOffsetDays: Int = 0): List<UpcomingIslamicDay> {
+        val todayGreg = getTodayGregorian()
+        val todayJdn = gregorianToJdn(todayGreg.year, todayGreg.month, todayGreg.day)
+        val todayHijri = jdnToHijri(todayJdn, hilalOffsetDays)
+
+        val candidates = listOf(
+            Triple("🌑", "Shab-e-Meraj", 7 to 27),
+            Triple("🌙", "Shab-e-Barat", 8 to 15),
+            Triple("🌙", "1st Ramzan", 9 to 1),
+            Triple("✨", "Shab-e-Qadr (27th)", 9 to 27),
+            Triple("🎉", "Eid-ul-Fitr", 10 to 1),
+            Triple("🕌", "Youm-e-Arafat", 12 to 9),
+            Triple("🐑", "Eid-ul-Adha", 12 to 10),
+            Triple("🏴", "Youm-e-Ashura", 1 to 10)
+        )
+
+        val monthLabels = listOf(
+            "Muharram", "Safar", "Rabi al-Awwal", "Rabi al-Thani",
+            "Jumada al-Awwal", "Jumada al-Thani", "Rajab", "Shaban",
+            "Ramzan", "Shawwal", "ZilQad", "ZilHajj"
+        )
+
+        return candidates.map { (emoji, title, md) ->
+            val (hMonth, hDay) = md
+            var targetYear = todayHijri.year
+            var targetJdn = hijriToJdn(targetYear, hMonth, hDay, hilalOffsetDays)
+            if (targetJdn < todayJdn) {
+                targetYear += 1
+                targetJdn = hijriToJdn(targetYear, hMonth, hDay, hilalOffsetDays)
+            }
+            val gDate = jdnToGregorian(targetJdn)
+            val daysLeft = (targetJdn - todayJdn).toInt().coerceAtLeast(0)
+            UpcomingIslamicDay(
+                emoji = emoji,
+                title = title,
+                hijriMonth = hMonth,
+                hijriDay = hDay,
+                hijriDateLabel = "$hDay ${monthLabels[hMonth - 1]} $targetYear AH",
+                gregorianDate = gDate,
+                daysRemaining = daysLeft
+            )
+        }.sortedBy { it.daysRemaining }
     }
 }

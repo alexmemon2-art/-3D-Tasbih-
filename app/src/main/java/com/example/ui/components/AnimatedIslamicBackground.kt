@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -21,6 +23,8 @@ import androidx.compose.ui.res.painterResource
 import com.example.model.IslamicWallpaper
 import com.example.model.IslamicWallpapers
 import kotlinx.coroutines.delay
+
+val LocalNightModeActive = compositionLocalOf { false }
 
 @Composable
 fun AnimatedIslamicBackground(
@@ -64,6 +68,13 @@ fun AnimatedIslamicBackground(
         }
 
         // Luxurious Dark Emerald Vignette Overlay (ensures 100% legibility of 3D beads & text)
+        val isNightMode = LocalNightModeActive.current
+        val nightDimColor by animateColorAsState(
+            targetValue = if (isNightMode) Color(0xBD020A06) else Color.Transparent,
+            animationSpec = tween(durationMillis = 600),
+            label = "night_mode_dim"
+        )
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -78,5 +89,13 @@ fun AnimatedIslamicBackground(
                     )
                 )
         )
+
+        if (isNightMode || nightDimColor.alpha > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(nightDimColor)
+            )
+        }
     }
 }
