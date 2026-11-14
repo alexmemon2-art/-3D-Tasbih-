@@ -67,7 +67,7 @@ fun AnimatedIslamicBackground(
             )
         }
 
-        // Luxurious Dark Emerald Vignette Overlay (ensures 100% legibility of 3D beads & text)
+        // Classic Deep Emerald Overlay (preserves crisp text contrast)
         val isNightMode = LocalNightModeActive.current
         val nightDimColor by animateColorAsState(
             targetValue = if (isNightMode) Color(0xBD020A06) else Color.Transparent,
@@ -81,10 +81,10 @@ fun AnimatedIslamicBackground(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xDD071E13), // Deep emerald-black top for title & icons
-                            Color(0x990D4A2E), // Translucent emerald mid for 3D beads glow
-                            Color(0xEE09291A), // Rich emerald base for counter display
-                            Color(0xF805170E)  // Deep solid emerald-black for bottom stats & history
+                            Color(0xDD071E13),
+                            Color(0x990D4A2E),
+                            Color(0xEE09291A),
+                            Color(0xF805170E)
                         )
                     )
                 )

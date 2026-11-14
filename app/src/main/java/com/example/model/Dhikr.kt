@@ -48,7 +48,6 @@ data class AppSettings(
     val vibrationEnabled: Boolean = true,
     val autoReset: Boolean = true,
     val keepScreenOn: Boolean = false,
-    val volumeKeyCount: Boolean = true,
     val countLocked: Boolean = false,
     val beadStyle: BeadStyle = BeadStyle.EMERALD_GOLD,
     val clickSoundStyle: ClickSoundStyle = ClickSoundStyle.WOODEN_BEAD,

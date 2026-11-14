@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MenuBook
@@ -65,12 +66,12 @@ fun CounterDisplay(
     count: Int,
     dhikr: Dhikr,
     countLocked: Boolean = false,
-    volumeKeyEnabled: Boolean = true,
     onIncrement: () -> Unit,
     onReset: () -> Unit,
     onUndo: () -> Unit,
     onToggleLock: () -> Unit = {},
     onOpenFazilat: () -> Unit = {},
+    onSpeakDhikr: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val countScale = remember { Animatable(1f) }
@@ -207,16 +208,48 @@ fun CounterDisplay(
 
             Spacer(modifier = Modifier.height(3.dp))
 
-            // Transliteration
-            Text(
-                text = dhikr.transliteration,
-                fontSize = 15.sp,
-                fontStyle = FontStyle.Italic,
-                fontWeight = FontWeight.SemiBold,
-                color = IvoryText,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.testTag("dhikr_transliteration_text")
-            )
+            // Transliteration + Speak button
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = dhikr.transliteration,
+                    fontSize = 15.sp,
+                    fontStyle = FontStyle.Italic,
+                    fontWeight = FontWeight.SemiBold,
+                    color = IvoryText,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.testTag("dhikr_transliteration_text")
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.12f))
+                        .border(0.8.dp, GoldBright.copy(alpha = 0.6f), CircleShape)
+                        .clickable { onSpeakDhikr() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .testTag("counter_speak_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = "Listen to Dhikr",
+                            tint = GoldBright,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "Suno",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = GoldBright
+                        )
+                    }
+                }
+            }
 
             // Meaning
             Text(
@@ -325,8 +358,7 @@ fun CounterDisplay(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "✨ Tap the circle to count ✨" +
-                    if (volumeKeyEnabled) "  •  🎚️ Vol +/−" else "",
+                text = "✨ Tap the circle to count ✨",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = GoldLight,

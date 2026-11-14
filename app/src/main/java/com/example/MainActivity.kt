@@ -1,7 +1,6 @@
 package com.example
 
 import android.os.Bundle
-import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -30,17 +29,5 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         viewModel.syncFromPreferences(resetSessionCount = false)
         TasbihWidgetUpdater.updateAllWidgets(this)
-    }
-
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (viewModel.uiState.value.settings.volumeKeyCount) {
-            when (keyCode) {
-                KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                    viewModel.increment()
-                    return true
-                }
-            }
-        }
-        return super.onKeyDown(keyCode, event)
     }
 }

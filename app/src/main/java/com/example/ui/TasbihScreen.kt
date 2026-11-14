@@ -82,6 +82,7 @@ import com.example.ui.components.StartSplashScreen
 import com.example.ui.components.StatsCards
 import com.example.ui.components.Tasbih3DCanvas
 import com.example.ui.components.TasbihHeader
+import com.example.ui.components.VoiceSettingsScreen
 import com.example.ui.theme.EmeraldDeepDark
 import com.example.ui.theme.GlassBorder
 import com.example.ui.theme.GoldBright
@@ -139,12 +140,15 @@ fun TasbihScreen(
         uiState.activeSubScreen == SubScreen.NAMAZ_GUIDE -> ScreenMode.NAMAZ_GUIDE
         uiState.activeSubScreen == SubScreen.CHALLENGES -> ScreenMode.CHALLENGES
         uiState.activeSubScreen == SubScreen.NIGHT_TIMER -> ScreenMode.NIGHT_TIMER
+        uiState.activeSubScreen == SubScreen.VOICE_SETTINGS -> ScreenMode.VOICE_SETTINGS
         uiState.showCalendarScreen -> ScreenMode.CALENDAR
         uiState.showStartingScreen -> ScreenMode.STARTING
         else -> ScreenMode.MAIN
     }
 
-    CompositionLocalProvider(LocalNightModeActive provides uiState.isNightModeEffective) {
+    CompositionLocalProvider(
+        LocalNightModeActive provides uiState.isNightModeEffective
+    ) {
         AnimatedContent(
             targetState = currentMode,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -286,6 +290,19 @@ fun TasbihScreen(
                     onBack = { viewModel.closeSubScreen() }
                 )
             }
+            ScreenMode.VOICE_SETTINGS -> {
+                VoiceSettingsScreen(
+                    wallpaperIndex = uiState.wallpaperIndex,
+                    voices = viewModel.getVoiceOptions(),
+                    savedVoiceId = uiState.selectedVoiceId,
+                    savedSpeed = uiState.voiceSpeed,
+                    hasElevenLabsKey = viewModel.hasElevenLabsKey(),
+                    onPreviewVoice = { voiceId, speed -> viewModel.previewVoice("SubhanAllah", voiceId, speed) },
+                    onStopVoice = { viewModel.stopVoice() },
+                    onSaveVoice = { voiceId, speed -> viewModel.saveVoiceSelection(voiceId, speed) },
+                    onBack = { viewModel.closeSubScreen() }
+                )
+            }
             ScreenMode.EXIT -> {
                 ExitConfirmScreen(
                     sessionCount = uiState.sessionCount,
@@ -405,12 +422,12 @@ fun TasbihScreen(
                                     count = uiState.count,
                                     dhikr = uiState.currentDhikr,
                                     countLocked = uiState.settings.countLocked,
-                                    volumeKeyEnabled = uiState.settings.volumeKeyCount,
                                     onIncrement = { viewModel.increment() },
                                     onReset = { viewModel.reset() },
                                     onUndo = { viewModel.undo() },
                                     onToggleLock = { viewModel.toggleCountLock() },
                                     onOpenFazilat = { viewModel.openSubScreen(SubScreen.FAZILAT) },
+                                    onSpeakDhikr = { viewModel.speakCurrentDhikr() },
                                     modifier = Modifier.padding(horizontal = 16.dp)
                                 )
 
@@ -430,6 +447,7 @@ fun TasbihScreen(
                                     onOpenNamazGuide = { viewModel.openSubScreen(SubScreen.NAMAZ_GUIDE) },
                                     onOpenChallenges = { viewModel.openSubScreen(SubScreen.CHALLENGES) },
                                     onOpenNightTimer = { viewModel.openSubScreen(SubScreen.NIGHT_TIMER) },
+                                    onOpenVoiceSettings = { viewModel.openSubScreen(SubScreen.VOICE_SETTINGS) },
                                     onOpenSettings = { viewModel.showSettings(true) },
                                     modifier = Modifier.padding(horizontal = 16.dp)
                                 )
@@ -525,6 +543,7 @@ fun TasbihScreen(
                             onOpenNamazGuide = { viewModel.openSubScreen(SubScreen.NAMAZ_GUIDE) },
                             onOpenChallenges = { viewModel.openSubScreen(SubScreen.CHALLENGES) },
                             onOpenNightTimer = { viewModel.openSubScreen(SubScreen.NIGHT_TIMER) },
+                            onOpenVoiceSettings = { viewModel.openSubScreen(SubScreen.VOICE_SETTINGS) },
                             onSaveSettings = { viewModel.updateSettings(it) },
                             onDismiss = { viewModel.showSettings(false) }
                         )
@@ -566,6 +585,7 @@ private fun IslamicToolsHubCard(
     onOpenNamazGuide: () -> Unit,
     onOpenChallenges: () -> Unit,
     onOpenNightTimer: () -> Unit,
+    onOpenVoiceSettings: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -757,14 +777,29 @@ private fun IslamicToolsHubCard(
                 }
             }
 
-            com.example.ui.components.Glass3DButton(
-                onClick = onOpenSettings,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                isPrimaryGold = false,
-                shape = RoundedCornerShape(18.dp),
-                testTag = "hub_settings_button"
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("⚙️ Settings, Widgets & Themes", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GoldBright)
+                com.example.ui.components.Glass3DButton(
+                    onClick = onOpenVoiceSettings,
+                    modifier = Modifier.weight(1f),
+                    isPrimaryGold = false,
+                    shape = RoundedCornerShape(18.dp),
+                    testTag = "hub_voice_settings_button"
+                ) {
+                    Text("🎙️ Voice & TTS", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GoldLight)
+                }
+
+                com.example.ui.components.Glass3DButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.weight(1f),
+                    isPrimaryGold = false,
+                    shape = RoundedCornerShape(18.dp),
+                    testTag = "hub_settings_button"
+                ) {
+                    Text("⚙️ Settings", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GoldBright)
+                }
             }
         }
     }
@@ -909,5 +944,6 @@ private enum class ScreenMode {
     NAMAZ_GUIDE,
     CHALLENGES,
     NIGHT_TIMER,
+    VOICE_SETTINGS,
     EXIT
 }

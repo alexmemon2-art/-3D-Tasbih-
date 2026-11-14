@@ -194,7 +194,6 @@ class TasbihPreferences(context: Context) {
             vibrationEnabled = prefs.getBoolean(KEY_VIBRATION_ENABLED, true),
             autoReset = prefs.getBoolean(KEY_AUTO_RESET, true),
             keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, false),
-            volumeKeyCount = prefs.getBoolean(KEY_VOLUME_KEY_COUNT, true),
             countLocked = prefs.getBoolean(KEY_COUNT_LOCKED, false),
             beadStyle = style,
             clickSoundStyle = clickStyle,
@@ -210,7 +209,6 @@ class TasbihPreferences(context: Context) {
             .putBoolean(KEY_VIBRATION_ENABLED, settings.vibrationEnabled)
             .putBoolean(KEY_AUTO_RESET, settings.autoReset)
             .putBoolean(KEY_KEEP_SCREEN_ON, settings.keepScreenOn)
-            .putBoolean(KEY_VOLUME_KEY_COUNT, settings.volumeKeyCount)
             .putBoolean(KEY_COUNT_LOCKED, settings.countLocked)
             .putString(KEY_BEAD_STYLE, settings.beadStyle.name)
             .putString(KEY_CLICK_SOUND_STYLE, settings.clickSoundStyle.name)
@@ -381,7 +379,6 @@ class TasbihPreferences(context: Context) {
         private const val KEY_VIBRATION_ENABLED = "vibration_enabled"
         private const val KEY_AUTO_RESET = "auto_reset"
         private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
-        private const val KEY_VOLUME_KEY_COUNT = "volume_key_count"
         private const val KEY_COUNT_LOCKED = "count_locked"
         private const val KEY_BEAD_STYLE = "bead_style"
         private const val KEY_CLICK_SOUND_STYLE = "click_sound_style"

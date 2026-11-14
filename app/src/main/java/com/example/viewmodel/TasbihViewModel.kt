@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.audio.AudioFeedback
+import com.example.audio.VoiceManager
 import com.example.data.NightModeLogic
 import com.example.data.TasbihPreferences
 import com.example.haptic.HapticHelper
@@ -46,7 +47,8 @@ enum class SubScreen {
     SPECIAL_DHIKR,
     NAMAZ_GUIDE,
     CHALLENGES,
-    NIGHT_TIMER
+    NIGHT_TIMER,
+    VOICE_SETTINGS
 }
 
 data class TasbihUiState(
@@ -87,12 +89,15 @@ data class TasbihUiState(
     val timerDurationMinutes: Int = 10,
     val timerRemainingMillis: Long = 10 * 60_000L,
     val isTimerRunning: Boolean = false,
-    val isTimerCompleted: Boolean = false
+    val isTimerCompleted: Boolean = false,
+    val selectedVoiceId: String = VoiceManager.VOICE_SYSTEM_TTS,
+    val voiceSpeed: Float = 1.0f
 )
 
 class TasbihViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = TasbihPreferences(application)
     private val audioFeedback = AudioFeedback(application)
+    private val voiceManager = VoiceManager(application)
     private val hapticHelper = HapticHelper(application)
     private var timerJob: Job? = null
 
@@ -140,6 +145,8 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
         val autoNight = prefs.getAutoNightModeEnabled()
         val manualNight = prefs.getManualNightModeEnabled()
         val nightEffective = NightModeLogic.isEffectiveNightMode(autoNight, manualNight)
+        val selectedVoiceId = voiceManager.getSelectedVoiceId()
+        val voiceSpeed = voiceManager.getSpeed()
 
         _uiState.update {
             it.copy(
@@ -165,7 +172,9 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
                 todayHadeesDone = todayHadeesDone,
                 autoNightMode = autoNight,
                 manualNightMode = manualNight,
-                isNightModeEffective = nightEffective
+                isNightModeEffective = nightEffective,
+                selectedVoiceId = selectedVoiceId,
+                voiceSpeed = voiceSpeed
             )
         }
     }
@@ -199,7 +208,11 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
 
         if (targetReached) {
             if (state.settings.soundEnabled) {
-                audioFeedback.playCompletionChime(state.settings.completionSoundStyle)
+                if (state.settings.completionSoundStyle == com.example.model.CompletionSoundStyle.ALLAHU_AKBAR_VOICE) {
+                    voiceManager.speak("Allahu Akbar")
+                } else {
+                    audioFeedback.playCompletionChime(state.settings.completionSoundStyle)
+                }
             }
             if (state.settings.vibrationEnabled) {
                 hapticHelper.vibrateTargetReached()
@@ -729,9 +742,38 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun getVoiceOptions(): List<VoiceManager.VoiceOption> = voiceManager.allVoices
+
+    fun hasElevenLabsKey(): Boolean = voiceManager.hasConfiguredElevenLabsKey()
+
+    fun previewVoice(text: String = "SubhanAllah", voiceId: String, speed: Float) {
+        voiceManager.speak(text = text, overrideVoiceId = voiceId, overrideSpeed = speed)
+    }
+
+    fun stopVoice() {
+        voiceManager.stop()
+    }
+
+    fun saveVoiceSelection(voiceId: String, speed: Float) {
+        voiceManager.setSelectedVoice(voiceId)
+        voiceManager.setSpeed(speed)
+        _uiState.update {
+            it.copy(
+                selectedVoiceId = voiceManager.getSelectedVoiceId(),
+                voiceSpeed = voiceManager.getSpeed()
+            )
+        }
+    }
+
+    fun speakCurrentDhikr() {
+        val dhikr = _uiState.value.currentDhikr
+        voiceManager.speak(dhikr.transliteration.ifBlank { dhikr.arabic })
+    }
+
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()
         audioFeedback.release()
+        voiceManager.destroy()
     }
 }

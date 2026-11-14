@@ -95,6 +95,7 @@ fun SettingsDialog(
     onOpenNamazGuide: () -> Unit = {},
     onOpenChallenges: () -> Unit = {},
     onOpenNightTimer: () -> Unit = {},
+    onOpenVoiceSettings: () -> Unit = {},
     onSaveSettings: (AppSettings) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -105,7 +106,6 @@ fun SettingsDialog(
     var vibrationEnabled by remember { mutableStateOf(settings.vibrationEnabled) }
     var autoReset by remember { mutableStateOf(settings.autoReset) }
     var keepScreenOn by remember { mutableStateOf(settings.keepScreenOn) }
-    var volumeKeyCount by remember { mutableStateOf(settings.volumeKeyCount) }
     var countLocked by remember { mutableStateOf(settings.countLocked) }
     var selectedBeadStyle by remember { mutableStateOf(settings.beadStyle) }
     var clickSoundStyle by remember { mutableStateOf(settings.clickSoundStyle) }
@@ -373,6 +373,23 @@ fun SettingsDialog(
                     )
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Glass3DButton(
+                    onClick = onOpenVoiceSettings,
+                    modifier = Modifier.fillMaxWidth(),
+                    isPrimaryGold = false,
+                    height = 46.dp,
+                    testTag = "settings_voice_btn"
+                ) {
+                    Text(
+                        text = "🎙️ Awaz Ka Intikhab (Voice & Speed)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = GoldBright
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(14.dp))
                 HorizontalDivider(color = GlassBorder, thickness = 0.8.dp)
                 Spacer(modifier = Modifier.height(12.dp))
@@ -577,7 +594,7 @@ fun SettingsDialog(
                 HorizontalDivider(color = GlassBorder, thickness = 0.8.dp)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Core Toggles (Sound, Vibration, Lock, Volume Button, Auto-reset, Screen On)
+                // Core Toggles (Sound, Vibration, Lock, Auto-reset, Screen On)
                 SettingSwitchRow(
                     label = "🔊 Sound On/Off",
                     checked = soundEnabled,
@@ -595,12 +612,6 @@ fun SettingsDialog(
                     checked = countLocked,
                     onCheckedChange = { countLocked = it },
                     testTag = "count_lock_toggle"
-                )
-                SettingSwitchRow(
-                    label = "🎚️ Volume Button se Count",
-                    checked = volumeKeyCount,
-                    onCheckedChange = { volumeKeyCount = it },
-                    testTag = "volume_keys_toggle"
                 )
                 SettingSwitchRow(
                     label = "Auto-reset on Target",
@@ -927,7 +938,6 @@ fun SettingsDialog(
                                 vibrationEnabled = vibrationEnabled,
                                 autoReset = autoReset,
                                 keepScreenOn = keepScreenOn,
-                                volumeKeyCount = volumeKeyCount,
                                 countLocked = countLocked,
                                 beadStyle = selectedBeadStyle,
                                 clickSoundStyle = clickSoundStyle,

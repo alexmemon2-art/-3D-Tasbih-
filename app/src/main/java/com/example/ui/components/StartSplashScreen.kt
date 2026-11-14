@@ -34,14 +34,10 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Diamond
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.TrackChanges
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -108,17 +104,17 @@ fun StartSplashScreen(
             contentScale = ContentScale.Crop
         )
 
-        // Dark Emerald Vignette & Radial Light Overlay
+        // Deep Emerald Gradient Overlay (ensures crisp readability)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xBB071E13),
-                            Color(0x770D4A2E),
-                            Color(0xDD071E13),
-                            Color(0xF504140C)
+                            Color(0xCC071E13),
+                            Color(0x880D4A2E),
+                            Color(0xEE071E13),
+                            Color(0xFA04140C)
                         )
                     )
                 )
@@ -158,28 +154,25 @@ fun StartSplashScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Glowing Crescent Emblem with Halo
+                // Glowing Crescent Emblem
                 Box(
                     modifier = Modifier
-                        .size(90.dp)
+                        .size(96.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    GoldBright.copy(alpha = 0.5f * glowAlpha),
-                                    GoldPrimary.copy(alpha = 0.25f * glowAlpha),
+                                    GoldBright.copy(alpha = 0.4f),
                                     Color.Transparent
                                 )
                             )
                         )
-                        .border(1.5.dp, GoldBright, CircleShape),
+                        .border(1.5.dp, GoldBright.copy(alpha = 0.7f * glowAlpha + 0.3f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "☪",
-                        fontSize = 46.sp,
-                        color = GoldBright,
-                        modifier = Modifier.scale(pulseScale)
+                        text = "🌙",
+                        fontSize = 44.sp
                     )
                 }
 
@@ -187,21 +180,19 @@ fun StartSplashScreen(
 
                 // App Title
                 Text(
-                    text = "3D تسبیح کاؤنٹر",
-                    fontSize = 34.sp,
+                    text = "Tasbih 3D",
+                    fontSize = 30.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = GoldBright,
                     textAlign = TextAlign.Center,
-                    letterSpacing = 1.sp
+                    letterSpacing = 1.2.sp
                 )
-
                 Text(
-                    text = "Divine 3D Dhikr & Azkar Sanctuary",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    text = "3D تسبیح کاؤنٹر",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
                     color = IvoryText,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 4.dp)
+                    textAlign = TextAlign.Center
                 )
 
                 // Quranic Ayat
