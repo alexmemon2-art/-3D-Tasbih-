@@ -13,7 +13,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.tasbih3d.kxmpzq"
+    applicationId = "com.usamamemon.tasbih3d"
     minSdk = 24
     targetSdk = 36
     versionCode = 200
