@@ -46,8 +46,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.GpsFixed
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
@@ -55,9 +60,11 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -79,6 +86,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.calendar.IslamicCalendarEngine
+import com.example.location.LiveLocationHelper
+import com.example.model.CustomPrayerTimesConfig
+import com.example.model.LocationTimezoneConfig
 import com.example.model.ReminderSettings
 import com.example.notifications.TasbihReminderScheduler
 import com.example.ui.theme.EmeraldDeepDark
@@ -89,8 +99,12 @@ import com.example.ui.theme.GoldPrimary
 import com.example.ui.theme.IvoryMuted
 import com.example.ui.theme.IvorySubtle
 import com.example.ui.theme.IvoryText
+import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -99,8 +113,18 @@ fun PrayerQiblaScreen(
     wallpaperIndex: Int,
     selectedCityName: String,
     reminderSettings: ReminderSettings,
+    locationConfig: LocationTimezoneConfig = LocationTimezoneConfig(),
+    customPrayerTimes: CustomPrayerTimesConfig = CustomPrayerTimesConfig(),
+    isOnline: Boolean = false,
+    isDetectingLocation: Boolean = false,
+    locationStatusMessage: String? = null,
     initialTab: Int = 0, // 0 = Prayer & Qibla, 1 = Reminders
     onCityChange: (String) -> Unit,
+    onToggleUseLiveLocation: (Boolean) -> Unit = {},
+    onDetectLiveLocation: () -> Unit = {},
+    onUpdateTimezone: (useCustom: Boolean, offsetHours: Double) -> Unit = { _, _ -> },
+    onUpdateCustomPrayerTimes: (CustomPrayerTimesConfig) -> Unit = {},
+    onResetCustomPrayerTimes: () -> Unit = {},
     onSaveReminders: (ReminderSettings) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -108,17 +132,59 @@ fun PrayerQiblaScreen(
     val context = LocalContext.current
     var activeTab by remember(initialTab) { mutableIntStateOf(initialTab) }
     var hanafiAsr by remember { mutableStateOf(true) }
+    var hasLocationPermission by remember {
+        mutableStateOf(LiveLocationHelper.hasLocationPermission(context))
+    }
 
-    val selectedCity = remember(selectedCityName) {
-        IslamicCalendarEngine.sindhCities.find { it.name == selectedCityName }
-            ?: IslamicCalendarEngine.sindhCities.first()
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val granted = grants.values.any { it } || LiveLocationHelper.hasLocationPermission(context)
+        hasLocationPermission = granted
+        if (granted) {
+            Toast.makeText(context, "✅ Location Permission Enable Ho Gai!", Toast.LENGTH_SHORT).show()
+            onDetectLiveLocation()
+        } else {
+            Toast.makeText(
+                context,
+                "⚠️ Live Location ke liye Location permission zaruri hai",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    // Live 12-hour clock ticker
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowMillis = System.currentTimeMillis()
+            delay(1000L)
+        }
+    }
+
+    val effectiveCity = remember(selectedCityName, locationConfig) {
+        IslamicCalendarEngine.resolveEffectiveCity(selectedCityName, locationConfig)
     }
     val todayGreg = remember { IslamicCalendarEngine.getTodayGregorian() }
-    val prayerTimes = remember(todayGreg, selectedCity, hanafiAsr) {
-        IslamicCalendarEngine.computeDailyPrayerTimes(todayGreg, selectedCity, hanafiAsr)
+    val calculatedPrayerTimes = remember(todayGreg, effectiveCity, hanafiAsr) {
+        IslamicCalendarEngine.computeDailyPrayerTimes(todayGreg, effectiveCity, hanafiAsr)
     }
-    val qiblaBearing = remember(selectedCity) {
-        IslamicCalendarEngine.computeQiblaBearingDegrees(selectedCity)
+    val prayerTimes = remember(calculatedPrayerTimes, customPrayerTimes) {
+        IslamicCalendarEngine.applyCustomPrayerTimes(calculatedPrayerTimes, customPrayerTimes)
+    }
+    val qiblaBearing = remember(effectiveCity) {
+        IslamicCalendarEngine.computeQiblaBearingDegrees(effectiveCity)
+    }
+
+    val activeTzLabel = IslamicCalendarEngine.formatTimezoneOffsetLabel(effectiveCity.timezoneHours)
+    val clock12hText = remember(nowMillis, locationConfig.useCustomTimezone, effectiveCity.timezoneHours) {
+        val formatter = SimpleDateFormat("hh:mm:ss a", Locale.US)
+        if (locationConfig.useCustomTimezone) {
+            val offsetMs = (effectiveCity.timezoneHours * 3_600_000.0).roundToInt()
+            val tz = TimeZone.getTimeZone("GMT").apply { rawOffset = offsetMs }
+            formatter.timeZone = tz
+        }
+        formatter.format(Date(nowMillis))
     }
 
     Box(
@@ -166,9 +232,9 @@ fun PrayerQiblaScreen(
                             color = GoldBright
                         )
                         Text(
-                            text = "Prayer Times, Qibla Compass & Alerts",
+                            text = if (isOnline) "🌐 Online • 12-Hour Schedule" else "📴 Offline Ready • 12-Hour Schedule",
                             fontSize = 11.sp,
-                            color = IvorySubtle
+                            color = if (isOnline) Color(0xFF6EE7B7) else IvorySubtle
                         )
                     }
                     Spacer(modifier = Modifier.size(42.dp))
@@ -239,7 +305,274 @@ fun PrayerQiblaScreen(
                             .padding(horizontal = 16.dp, vertical = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // City Selector
+                        // Live Location & Permission Card
+                        PrayerGlassCard {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.GpsFixed,
+                                            contentDescription = "Live Location",
+                                            tint = GoldBright,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "📍 Live Location & Permission",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = GoldBright
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (hasLocationPermission) Color(0x3310B981) else Color(0x33EF5350)
+                                            )
+                                            .border(
+                                                0.8.dp,
+                                                if (hasLocationPermission) Color(0xFF34D399) else Color(0xFFFF8A80),
+                                                CircleShape
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = if (hasLocationPermission) "✅ Enabled" else "⚠️ Disabled",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (hasLocationPermission) Color(0xFF6EE7B7) else Color(0xFFFF8A80)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                if (locationConfig.liveLatitude != null && locationConfig.liveLongitude != null) {
+                                    Text(
+                                        text = "📌 Saved GPS: ${locationConfig.liveCityName.ifBlank { "Live GPS" }} " +
+                                            "(${String.format(Locale.US, "%.4f, %.4f", locationConfig.liveLatitude, locationConfig.liveLongitude)})",
+                                        fontSize = 12.sp,
+                                        color = IvoryText
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    ReminderToggleRow(
+                                        label = "Use Live GPS Location for Namaz & Qibla",
+                                        checked = locationConfig.useLiveLocation,
+                                        onCheckedChange = { enabled ->
+                                            if (enabled && !LiveLocationHelper.hasLocationPermission(context)) {
+                                                locationPermissionLauncher.launch(LiveLocationHelper.REQUIRED_PERMISSIONS)
+                                            } else {
+                                                onToggleUseLiveLocation(enabled)
+                                            }
+                                        }
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Online ya Offline GPS se apni exact live location hasil karein taa ke Namaz aur Qibla 100% durust hon.",
+                                        fontSize = 11.sp,
+                                        color = IvorySubtle,
+                                        lineHeight = 15.sp
+                                    )
+                                }
+
+                                if (!locationStatusMessage.isNullOrBlank()) {
+                                    Text(
+                                        text = locationStatusMessage,
+                                        fontSize = 11.sp,
+                                        color = GoldLight,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (!hasLocationPermission) {
+                                        Glass3DButton(
+                                            onClick = {
+                                                locationPermissionLauncher.launch(LiveLocationHelper.REQUIRED_PERMISSIONS)
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                            isPrimaryGold = true,
+                                            height = 44.dp,
+                                            testTag = "btn_enable_location_permission"
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.LocationOn,
+                                                contentDescription = "Enable Location Permission",
+                                                tint = EmeraldDeepDark,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Enable Location Permission",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = EmeraldDeepDark
+                                            )
+                                        }
+                                    } else {
+                                        Glass3DButton(
+                                            onClick = {
+                                                if (!LiveLocationHelper.isLocationProviderEnabled(context)) {
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Phone ki GPS Location ON karein",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                    LiveLocationHelper.openDeviceLocationSettings(context)
+                                                } else {
+                                                    onDetectLiveLocation()
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                            isPrimaryGold = true,
+                                            enabled = !isDetectingLocation,
+                                            height = 44.dp,
+                                            testTag = "btn_detect_live_location"
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.GpsFixed,
+                                                contentDescription = "Detect Live Location",
+                                                tint = EmeraldDeepDark,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = if (isDetectingLocation) {
+                                                    "⏳ Detecting GPS..."
+                                                } else {
+                                                    "📍 Detect Live Location"
+                                                },
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = EmeraldDeepDark
+                                            )
+                                        }
+
+                                        Glass3DButton(
+                                            onClick = { LiveLocationHelper.openAppPermissionSettings(context) },
+                                            modifier = Modifier.width(96.dp),
+                                            isPrimaryGold = false,
+                                            height = 44.dp,
+                                            testTag = "btn_location_app_settings"
+                                        ) {
+                                            Text(
+                                                text = "⚙️ Perms",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = GoldBright
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Timezone & 12-Hour Clock Card
+                        PrayerGlassCard {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Public,
+                                            contentDescription = "Timezone",
+                                            tint = GoldBright,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "🕒 Timezone & 12-Hour Format",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = GoldBright
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(CircleShape)
+                                            .background(GoldPrimary.copy(alpha = 0.2f))
+                                            .border(0.8.dp, GoldBright, CircleShape)
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "12h AM/PM",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = GoldBright
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Text(
+                                    text = "Current Time: $clock12hText  •  $activeTzLabel",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = IvoryText,
+                                    modifier = Modifier.testTag("tv_12h_clock_timezone")
+                                )
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                ReminderToggleRow(
+                                    label = "Custom Timezone Offset Set Karein",
+                                    checked = locationConfig.useCustomTimezone,
+                                    onCheckedChange = { enabled ->
+                                        val defaultOffset = if (enabled) {
+                                            locationConfig.customTimezoneHours
+                                        } else {
+                                            IslamicCalendarEngine.getDeviceTimezoneOffsetHours()
+                                        }
+                                        onUpdateTimezone(enabled, defaultOffset)
+                                    }
+                                )
+
+                                if (locationConfig.useCustomTimezone) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "Apna Timezone Chunein (UTC Offset):",
+                                        fontSize = 11.sp,
+                                        color = IvorySubtle,
+                                        modifier = Modifier.padding(bottom = 6.dp)
+                                    )
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        contentPadding = PaddingValues(vertical = 2.dp)
+                                    ) {
+                                        items(IslamicCalendarEngine.supportedTimezoneOffsets) { offset ->
+                                            val isSel = abs(offset - locationConfig.customTimezoneHours) < 0.05
+                                            Glass3DPill(
+                                                selected = isSel,
+                                                onClick = { onUpdateTimezone(true, offset) }
+                                            ) {
+                                                Text(
+                                                    text = IslamicCalendarEngine.formatTimezoneOffsetLabel(offset),
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isSel) EmeraldDeepDark else IvoryText
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // City Selector (fallback / manual cities)
                         PrayerGlassCard {
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Row(
@@ -248,7 +581,7 @@ fun PrayerQiblaScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "📍 City (${selectedCity.sindhiName})",
+                                        text = "🏙️ City (${effectiveCity.name})",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = GoldBright
@@ -271,7 +604,7 @@ fun PrayerQiblaScreen(
                                     contentPadding = PaddingValues(vertical = 2.dp)
                                 ) {
                                     items(IslamicCalendarEngine.sindhCities) { city ->
-                                        val isSel = city.name == selectedCity.name
+                                        val isSel = !locationConfig.useLiveLocation && city.name == effectiveCity.name
                                         Glass3DPill(
                                             selected = isSel,
                                             onClick = { onCityChange(city.name) }
@@ -290,37 +623,152 @@ fun PrayerQiblaScreen(
 
                         // Live Qibla Compass
                         QiblaCompassCard(
-                            cityName = selectedCity.name,
+                            cityName = effectiveCity.name,
                             qiblaBearing = qiblaBearing
                         )
 
-                        // Daily 5 Namaz Times Card
+                        // Daily 5 Namaz Times Card + Custom Namaz Time Override
                         PrayerGlassCard {
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 val cal = Calendar.getInstance()
                                 val nowMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
-                                val prayers = listOf(
-                                    Triple("فجر • Fajr", prayerTimes.fajr, prayerTimes.fajrMinutes),
-                                    Triple("طلوعِ آفتاب • Sunrise", prayerTimes.sunrise, prayerTimes.sunriseMinutes),
-                                    Triple("ظہر • Zuhr", prayerTimes.zuhr, prayerTimes.zuhrMinutes),
-                                    Triple("عصر • Asr", prayerTimes.asr, prayerTimes.asrMinutes),
-                                    Triple("مغرب • Maghrib", prayerTimes.maghrib, prayerTimes.maghribMinutes),
-                                    Triple("عشاء • Isha", prayerTimes.isha, prayerTimes.ishaMinutes)
+
+                                data class PrayerRowItem(
+                                    val key: String,
+                                    val label: String,
+                                    val timeStr: String,
+                                    val minutes: Int,
+                                    val editable: Boolean,
+                                    val isOverridden: Boolean
                                 )
-                                val nextIdx = prayers.indexOfFirst { it.third > nowMinutes }.let {
+
+                                val prayers = listOf(
+                                    PrayerRowItem(
+                                        "fajr",
+                                        "فجر • Fajr",
+                                        prayerTimes.fajr,
+                                        prayerTimes.fajrMinutes,
+                                        true,
+                                        customPrayerTimes.useCustomTimes && customPrayerTimes.fajrMinutes != null
+                                    ),
+                                    PrayerRowItem(
+                                        "sunrise",
+                                        "طلوعِ آفتاب • Sunrise",
+                                        prayerTimes.sunrise,
+                                        prayerTimes.sunriseMinutes,
+                                        false,
+                                        false
+                                    ),
+                                    PrayerRowItem(
+                                        "zuhr",
+                                        "ظہر • Zuhr",
+                                        prayerTimes.zuhr,
+                                        prayerTimes.zuhrMinutes,
+                                        true,
+                                        customPrayerTimes.useCustomTimes && customPrayerTimes.zuhrMinutes != null
+                                    ),
+                                    PrayerRowItem(
+                                        "asr",
+                                        "عصر • Asr",
+                                        prayerTimes.asr,
+                                        prayerTimes.asrMinutes,
+                                        true,
+                                        customPrayerTimes.useCustomTimes && customPrayerTimes.asrMinutes != null
+                                    ),
+                                    PrayerRowItem(
+                                        "maghrib",
+                                        "مغرب • Maghrib",
+                                        prayerTimes.maghrib,
+                                        prayerTimes.maghribMinutes,
+                                        true,
+                                        customPrayerTimes.useCustomTimes && customPrayerTimes.maghribMinutes != null
+                                    ),
+                                    PrayerRowItem(
+                                        "isha",
+                                        "عشاء • Isha",
+                                        prayerTimes.isha,
+                                        prayerTimes.ishaMinutes,
+                                        true,
+                                        customPrayerTimes.useCustomTimes && customPrayerTimes.ishaMinutes != null
+                                    )
+                                )
+                                val nextIdx = prayers.indexOfFirst { it.minutes > nowMinutes }.let {
                                     if (it == -1) 0 else it
                                 }
 
-                                Text(
-                                    text = "🕌 Aaj Ke Namaz Auqat (${selectedCity.name})",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = GoldBright,
-                                    modifier = Modifier.padding(bottom = 10.dp)
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "🕌 Namaz Auqat (${effectiveCity.name})",
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = GoldBright
+                                        )
+                                        Text(
+                                            text = "12-Hour Format • Kisi bhi Namaz par tap kar ke Custom Time rakhein",
+                                            fontSize = 11.sp,
+                                            color = IvorySubtle
+                                        )
+                                    }
+                                    if (customPrayerTimes.useCustomTimes) {
+                                        Glass3DPill(
+                                            selected = false,
+                                            onClick = onResetCustomPrayerTimes,
+                                            testTag = "btn_reset_custom_prayer_times"
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Refresh,
+                                                contentDescription = "Reset Custom Times",
+                                                tint = GoldBright,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "Auto Reset",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = GoldBright
+                                            )
+                                        }
+                                    }
+                                }
 
-                                prayers.forEachIndexed { idx, (label, timeStr, _) ->
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                prayers.forEachIndexed { idx, item ->
                                     val isNext = idx == nextIdx
+                                    val openPicker = {
+                                        val initHour = (item.minutes / 60).coerceIn(0, 23)
+                                        val initMin = (item.minutes % 60).coerceIn(0, 59)
+                                        TimePickerDialog(
+                                            context,
+                                            { _, pickedHour, pickedMinute ->
+                                                val totalMin = pickedHour * 60 + pickedMinute
+                                                val updated = when (item.key) {
+                                                    "fajr" -> customPrayerTimes.copy(useCustomTimes = true, fajrMinutes = totalMin)
+                                                    "zuhr" -> customPrayerTimes.copy(useCustomTimes = true, zuhrMinutes = totalMin)
+                                                    "asr" -> customPrayerTimes.copy(useCustomTimes = true, asrMinutes = totalMin)
+                                                    "maghrib" -> customPrayerTimes.copy(useCustomTimes = true, maghribMinutes = totalMin)
+                                                    "isha" -> customPrayerTimes.copy(useCustomTimes = true, ishaMinutes = totalMin)
+                                                    else -> customPrayerTimes
+                                                }
+                                                onUpdateCustomPrayerTimes(updated)
+                                                Toast.makeText(
+                                                    context,
+                                                    "✅ ${item.label}: ${IslamicCalendarEngine.formatMinutes12h(totalMin)} save ho gaya",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            },
+                                            initHour,
+                                            initMin,
+                                            false // 12-hour AM/PM picker
+                                        ).show()
+                                    }
+
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -334,22 +782,51 @@ fun PrayerQiblaScreen(
                                                 if (isNext) GoldBright else Color.Transparent,
                                                 RoundedCornerShape(12.dp)
                                             )
-                                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                                            .then(
+                                                if (item.editable) {
+                                                    Modifier.clickable { openPicker() }
+                                                } else {
+                                                    Modifier
+                                                }
+                                            )
+                                            .padding(horizontal = 14.dp, vertical = 11.dp)
+                                            .testTag("prayer_row_${item.key}"),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            text = if (isNext) "$label  (Next)" else label,
-                                            fontSize = 14.sp,
-                                            fontWeight = if (isNext) FontWeight.ExtraBold else FontWeight.SemiBold,
-                                            color = if (isNext) GoldBright else IvoryText
-                                        )
-                                        Text(
-                                            text = timeStr,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = if (isNext) GoldBright else GoldLight
-                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = if (isNext) "${item.label}  (Next)" else item.label,
+                                                fontSize = 14.sp,
+                                                fontWeight = if (isNext) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                                color = if (isNext) GoldBright else IvoryText
+                                            )
+                                            if (item.isOverridden) {
+                                                Text(
+                                                    text = "✏️ Custom Time Set",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = GoldLight
+                                                )
+                                            }
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = item.timeStr,
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = if (isNext) GoldBright else GoldLight
+                                            )
+                                            if (item.editable) {
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.Edit,
+                                                    contentDescription = "Set Custom ${item.label} Time",
+                                                    tint = GoldBright.copy(alpha = 0.8f),
+                                                    modifier = Modifier.size(15.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                     if (idx < prayers.lastIndex) {
                                         Spacer(modifier = Modifier.height(6.dp))
@@ -363,7 +840,7 @@ fun PrayerQiblaScreen(
                 } else {
                     RemindersSettingsContent(
                         context = context,
-                        selectedCityName = selectedCity.name,
+                        selectedCityName = effectiveCity.name,
                         prayerTimes = prayerTimes,
                         reminderSettings = reminderSettings,
                         onSaveReminders = onSaveReminders
@@ -529,7 +1006,7 @@ private fun QiblaCompassCard(
 
             Text(
                 text = when {
-                    !hasSensor -> "Magnetometer not detected on this device — face ${qiblaBearing.roundToInt()}° (WNW toward Makkah)."
+                    !hasSensor -> "Magnetometer not detected on this device — face ${qiblaBearing.roundToInt()}° (toward Makkah)."
                     isAligned -> "✨ Aligned directly toward the Holy Kaaba!"
                     else -> "Rotate phone until the golden arrow points straight up (${relativeQiblaDeg.roundToInt()}°)."
                 },
@@ -597,7 +1074,7 @@ private fun RemindersSettingsContent(
                     color = GoldBright
                 )
                 Text(
-                    text = "Get a gentle notification after each prayer ($selectedCityName schedule).",
+                    text = "Get a gentle notification after each prayer ($selectedCityName • 12h schedule).",
                     fontSize = 11.sp,
                     color = IvorySubtle,
                     modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)

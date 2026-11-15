@@ -195,8 +195,18 @@ fun TasbihScreen(
                     wallpaperIndex = uiState.wallpaperIndex,
                     selectedCityName = uiState.selectedCityName,
                     reminderSettings = uiState.reminderSettings,
+                    locationConfig = uiState.locationConfig,
+                    customPrayerTimes = uiState.customPrayerTimes,
+                    isOnline = uiState.isOnline,
+                    isDetectingLocation = uiState.isDetectingLocation,
+                    locationStatusMessage = uiState.locationStatusMessage,
                     initialTab = uiState.prayerQiblaInitialTab,
                     onCityChange = { viewModel.setSelectedCity(it) },
+                    onToggleUseLiveLocation = { viewModel.toggleUseLiveLocation(it) },
+                    onDetectLiveLocation = { viewModel.detectAndSaveLiveLocation() },
+                    onUpdateTimezone = { useCustom, offset -> viewModel.updateTimezoneConfig(useCustom, offset) },
+                    onUpdateCustomPrayerTimes = { viewModel.updateCustomPrayerTimes(it) },
+                    onResetCustomPrayerTimes = { viewModel.resetCustomPrayerTimes() },
                     onSaveReminders = { viewModel.updateReminderSettings(it) },
                     onBack = { viewModel.closeSubScreen() }
                 )
@@ -297,6 +307,10 @@ fun TasbihScreen(
                     savedVoiceId = uiState.selectedVoiceId,
                     savedSpeed = uiState.voiceSpeed,
                     hasElevenLabsKey = viewModel.hasElevenLabsKey(),
+                    isOnline = uiState.isOnline,
+                    cachedVoiceCount = uiState.cachedVoiceCount,
+                    isPreloadingCache = uiState.isPreloadingVoiceCache,
+                    onPreloadOfflineVoices = { voiceId -> viewModel.preloadOfflineVoices(voiceId) },
                     onPreviewVoice = { voiceId, speed -> viewModel.previewVoice("SubhanAllah", voiceId, speed) },
                     onStopVoice = { viewModel.stopVoice() },
                     onSaveVoice = { voiceId, speed -> viewModel.saveVoiceSelection(voiceId, speed) },
@@ -343,6 +357,7 @@ fun TasbihScreen(
                             ) {
                                 TasbihHeader(
                                     settings = uiState.settings,
+                                    isOnline = uiState.isOnline,
                                     onToggleSound = {
                                         viewModel.updateSettings(
                                             uiState.settings.copy(soundEnabled = !uiState.settings.soundEnabled)
@@ -544,6 +559,7 @@ fun TasbihScreen(
                             onOpenChallenges = { viewModel.openSubScreen(SubScreen.CHALLENGES) },
                             onOpenNightTimer = { viewModel.openSubScreen(SubScreen.NIGHT_TIMER) },
                             onOpenVoiceSettings = { viewModel.openSubScreen(SubScreen.VOICE_SETTINGS) },
+                            onDetectLiveLocation = { viewModel.detectAndSaveLiveLocation() },
                             onSaveSettings = { viewModel.updateSettings(it) },
                             onDismiss = { viewModel.showSettings(false) }
                         )

@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.tasbih3d.kxmpzq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 191
-    versionName = "19.1"
+    versionCode = 200
+    versionName = "20.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

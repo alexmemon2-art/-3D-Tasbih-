@@ -67,6 +67,24 @@ data class ReminderSettings(
     val customMinute: Int = 0
 )
 
+data class LocationTimezoneConfig(
+    val useLiveLocation: Boolean = false,
+    val liveLatitude: Double? = null,
+    val liveLongitude: Double? = null,
+    val liveCityName: String = "",
+    val useCustomTimezone: Boolean = false,
+    val customTimezoneHours: Double = 5.0
+)
+
+data class CustomPrayerTimesConfig(
+    val useCustomTimes: Boolean = false,
+    val fajrMinutes: Int? = null,
+    val zuhrMinutes: Int? = null,
+    val asrMinutes: Int? = null,
+    val maghribMinutes: Int? = null,
+    val ishaMinutes: Int? = null
+)
+
 data class DailyDayStat(
     val dateKey: String,
     val label: String,

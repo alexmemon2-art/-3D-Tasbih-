@@ -1,7 +1,10 @@
 package com.example.calendar
 
+import com.example.model.CustomPrayerTimesConfig
+import com.example.model.LocationTimezoneConfig
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.acos
@@ -552,7 +555,81 @@ object IslamicCalendarEngine {
         return r
     }
 
-    private fun formatMinutes12h(totalMinutes: Int): String {
+    val supportedTimezoneOffsets: List<Double> = listOf(
+        -11.0, -10.0, -9.0, -8.0, -7.0, -6.0, -5.0, -4.0, -3.5, -3.0, -2.0, -1.0,
+        0.0, 1.0, 2.0, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 5.75, 6.0, 6.5,
+        7.0, 8.0, 9.0, 9.5, 10.0, 11.0, 12.0, 13.0
+    )
+
+    fun getDeviceTimezoneOffsetHours(): Double {
+        val tz = TimeZone.getDefault()
+        return tz.getOffset(System.currentTimeMillis()) / 3_600_000.0
+    }
+
+    fun formatTimezoneOffsetLabel(offsetHours: Double): String {
+        val totalMinutes = (offsetHours * 60.0).roundToInt()
+        val sign = if (totalMinutes >= 0) "+" else "-"
+        val absMinutes = abs(totalMinutes)
+        val hours = absMinutes / 60
+        val mins = absMinutes % 60
+        return String.format(Locale.US, "UTC %s%02d:%02d", sign, hours, mins)
+    }
+
+    fun resolveEffectiveCity(
+        selectedCityName: String,
+        locationConfig: LocationTimezoneConfig
+    ): CityCoordinates {
+        val baseCity = sindhCities.find { it.name == selectedCityName } ?: sindhCities.first()
+        val effectiveTz = if (locationConfig.useCustomTimezone) {
+            locationConfig.customTimezoneHours.coerceIn(-12.0, 14.0)
+        } else if (locationConfig.useLiveLocation) {
+            getDeviceTimezoneOffsetHours()
+        } else {
+            baseCity.timezoneHours
+        }
+
+        return if (locationConfig.useLiveLocation &&
+            locationConfig.liveLatitude != null &&
+            locationConfig.liveLongitude != null
+        ) {
+            CityCoordinates(
+                name = locationConfig.liveCityName.ifBlank { "Live GPS" },
+                sindhiName = "Live GPS",
+                latitude = locationConfig.liveLatitude,
+                longitude = locationConfig.liveLongitude,
+                timezoneHours = effectiveTz
+            )
+        } else {
+            baseCity.copy(timezoneHours = effectiveTz)
+        }
+    }
+
+    fun applyCustomPrayerTimes(
+        base: DailyPrayerTimes,
+        custom: CustomPrayerTimesConfig
+    ): DailyPrayerTimes {
+        if (!custom.useCustomTimes) return base
+        val fajrMin = custom.fajrMinutes?.let { ((it % 1440) + 1440) % 1440 } ?: base.fajrMinutes
+        val zuhrMin = custom.zuhrMinutes?.let { ((it % 1440) + 1440) % 1440 } ?: base.zuhrMinutes
+        val asrMin = custom.asrMinutes?.let { ((it % 1440) + 1440) % 1440 } ?: base.asrMinutes
+        val maghribMin = custom.maghribMinutes?.let { ((it % 1440) + 1440) % 1440 } ?: base.maghribMinutes
+        val ishaMin = custom.ishaMinutes?.let { ((it % 1440) + 1440) % 1440 } ?: base.ishaMinutes
+
+        return base.copy(
+            fajr = formatMinutes12h(fajrMin),
+            zuhr = formatMinutes12h(zuhrMin),
+            asr = formatMinutes12h(asrMin),
+            maghrib = formatMinutes12h(maghribMin),
+            isha = formatMinutes12h(ishaMin),
+            fajrMinutes = fajrMin,
+            zuhrMinutes = zuhrMin,
+            asrMinutes = asrMin,
+            maghribMinutes = maghribMin,
+            ishaMinutes = ishaMin
+        )
+    }
+
+    fun formatMinutes12h(totalMinutes: Int): String {
         val m = ((totalMinutes % 1440) + 1440) % 1440
         val hour24 = m / 60
         val min = m % 60

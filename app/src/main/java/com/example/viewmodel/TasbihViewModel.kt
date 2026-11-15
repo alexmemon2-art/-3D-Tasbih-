@@ -5,11 +5,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.audio.AudioFeedback
 import com.example.audio.VoiceManager
+import com.example.data.NetworkStatusHelper
 import com.example.data.NightModeLogic
 import com.example.data.TasbihPreferences
 import com.example.haptic.HapticHelper
+import com.example.location.LiveLocationHelper
 import com.example.model.AppSettings
 import com.example.model.AsmaName
+import com.example.model.CustomPrayerTimesConfig
 import com.example.model.DailyDayStat
 import com.example.model.DefaultDhikrs
 import com.example.model.Dhikr
@@ -17,6 +20,7 @@ import com.example.model.DhikrLevelInfo
 import com.example.model.DhikrLevels
 import com.example.model.HajatAzkar
 import com.example.model.HistoryItem
+import com.example.model.LocationTimezoneConfig
 import com.example.model.MasnoonDua
 import com.example.model.ReminderSettings
 import com.example.model.SpecialDhikr
@@ -91,7 +95,14 @@ data class TasbihUiState(
     val isTimerRunning: Boolean = false,
     val isTimerCompleted: Boolean = false,
     val selectedVoiceId: String = VoiceManager.VOICE_SYSTEM_TTS,
-    val voiceSpeed: Float = 1.0f
+    val voiceSpeed: Float = 1.0f,
+    val isOnline: Boolean = false,
+    val cachedVoiceCount: Int = 0,
+    val isPreloadingVoiceCache: Boolean = false,
+    val locationConfig: LocationTimezoneConfig = LocationTimezoneConfig(),
+    val customPrayerTimes: CustomPrayerTimesConfig = CustomPrayerTimesConfig(),
+    val isDetectingLocation: Boolean = false,
+    val locationStatusMessage: String? = null
 )
 
 class TasbihViewModel(application: Application) : AndroidViewModel(application) {
@@ -108,6 +119,15 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         loadInitialData()
+        observeNetworkStatus()
+    }
+
+    private fun observeNetworkStatus() {
+        viewModelScope.launch {
+            NetworkStatusHelper.observeOnlineStatus(getApplication()).collect { online ->
+                _uiState.update { it.copy(isOnline = online) }
+            }
+        }
     }
 
     private fun loadInitialData() {
@@ -147,6 +167,10 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
         val nightEffective = NightModeLogic.isEffectiveNightMode(autoNight, manualNight)
         val selectedVoiceId = voiceManager.getSelectedVoiceId()
         val voiceSpeed = voiceManager.getSpeed()
+        val cachedVoiceCount = voiceManager.getCachedClipCount()
+        val locationConfig = prefs.getLocationTimezoneConfig()
+        val customPrayerTimes = prefs.getCustomPrayerTimesConfig()
+        val onlineNow = NetworkStatusHelper.isOnline(getApplication())
 
         _uiState.update {
             it.copy(
@@ -174,7 +198,11 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
                 manualNightMode = manualNight,
                 isNightModeEffective = nightEffective,
                 selectedVoiceId = selectedVoiceId,
-                voiceSpeed = voiceSpeed
+                voiceSpeed = voiceSpeed,
+                isOnline = onlineNow,
+                cachedVoiceCount = cachedVoiceCount,
+                locationConfig = locationConfig,
+                customPrayerTimes = customPrayerTimes
             )
         }
     }
@@ -647,8 +675,104 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setSelectedCity(cityName: String) {
         prefs.saveSelectedCityName(cityName)
-        _uiState.update { it.copy(selectedCityName = cityName) }
+        val updatedLocation = _uiState.value.locationConfig.copy(useLiveLocation = false)
+        prefs.saveLocationTimezoneConfig(updatedLocation)
+        _uiState.update {
+            it.copy(
+                selectedCityName = cityName,
+                locationConfig = updatedLocation
+            )
+        }
         TasbihReminderScheduler.scheduleAll(getApplication(), _uiState.value.reminderSettings, cityName)
+    }
+
+    fun toggleUseLiveLocation(enabled: Boolean) {
+        val current = _uiState.value.locationConfig
+        val updated = current.copy(useLiveLocation = enabled)
+        prefs.saveLocationTimezoneConfig(updated)
+        _uiState.update { it.copy(locationConfig = updated) }
+        TasbihReminderScheduler.scheduleAll(getApplication(), _uiState.value.reminderSettings, _uiState.value.selectedCityName)
+        if (enabled && (updated.liveLatitude == null || updated.liveLongitude == null)) {
+            detectAndSaveLiveLocation()
+        }
+    }
+
+    fun detectAndSaveLiveLocation() {
+        if (_uiState.value.isDetectingLocation) return
+        _uiState.update {
+            it.copy(isDetectingLocation = true, locationStatusMessage = "📍 Live location dhoondhi ja rahi hai...")
+        }
+        viewModelScope.launch {
+            val result = LiveLocationHelper.fetchCurrentLocation(getApplication())
+            result.onSuccess { loc ->
+                val updated = _uiState.value.locationConfig.copy(
+                    useLiveLocation = true,
+                    liveLatitude = loc.latitude,
+                    liveLongitude = loc.longitude,
+                    liveCityName = loc.cityName
+                )
+                prefs.saveLocationTimezoneConfig(updated)
+                val statusMsg = if (loc.isFromCache) {
+                    "✅ Location set: ${loc.cityName} (Last Known)"
+                } else {
+                    "✅ Live GPS set: ${loc.cityName}"
+                }
+                _uiState.update {
+                    it.copy(
+                        locationConfig = updated,
+                        isDetectingLocation = false,
+                        locationStatusMessage = statusMsg
+                    )
+                }
+                TasbihReminderScheduler.scheduleAll(
+                    getApplication(),
+                    _uiState.value.reminderSettings,
+                    _uiState.value.selectedCityName
+                )
+            }.onFailure { err ->
+                _uiState.update {
+                    it.copy(
+                        isDetectingLocation = false,
+                        locationStatusMessage = "⚠️ ${err.message ?: "Location detect nahi ho saki"}"
+                    )
+                }
+            }
+        }
+    }
+
+    fun updateTimezoneConfig(useCustomTimezone: Boolean, offsetHours: Double) {
+        val updated = _uiState.value.locationConfig.copy(
+            useCustomTimezone = useCustomTimezone,
+            customTimezoneHours = offsetHours.coerceIn(-12.0, 14.0)
+        )
+        prefs.saveLocationTimezoneConfig(updated)
+        _uiState.update { it.copy(locationConfig = updated) }
+        TasbihReminderScheduler.scheduleAll(
+            getApplication(),
+            _uiState.value.reminderSettings,
+            _uiState.value.selectedCityName
+        )
+    }
+
+    fun updateCustomPrayerTimes(config: CustomPrayerTimesConfig) {
+        prefs.saveCustomPrayerTimesConfig(config)
+        _uiState.update { it.copy(customPrayerTimes = config) }
+        TasbihReminderScheduler.scheduleAll(
+            getApplication(),
+            _uiState.value.reminderSettings,
+            _uiState.value.selectedCityName
+        )
+    }
+
+    fun resetCustomPrayerTimes() {
+        val resetConfig = CustomPrayerTimesConfig(useCustomTimes = false)
+        prefs.saveCustomPrayerTimesConfig(resetConfig)
+        _uiState.update { it.copy(customPrayerTimes = resetConfig) }
+        TasbihReminderScheduler.scheduleAll(
+            getApplication(),
+            _uiState.value.reminderSettings,
+            _uiState.value.selectedCityName
+        )
     }
 
     fun toggleAutoNightMode(enabled: Boolean) {
@@ -748,6 +872,10 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
 
     fun previewVoice(text: String = "SubhanAllah", voiceId: String, speed: Float) {
         voiceManager.speak(text = text, overrideVoiceId = voiceId, overrideSpeed = speed)
+        viewModelScope.launch {
+            delay(1500L)
+            _uiState.update { it.copy(cachedVoiceCount = voiceManager.getCachedClipCount()) }
+        }
     }
 
     fun stopVoice() {
@@ -760,14 +888,34 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update {
             it.copy(
                 selectedVoiceId = voiceManager.getSelectedVoiceId(),
-                voiceSpeed = voiceManager.getSpeed()
+                voiceSpeed = voiceManager.getSpeed(),
+                cachedVoiceCount = voiceManager.getCachedClipCount()
             )
+        }
+    }
+
+    fun preloadOfflineVoices(voiceId: String) {
+        if (_uiState.value.isPreloadingVoiceCache) return
+        _uiState.update { it.copy(isPreloadingVoiceCache = true) }
+        viewModelScope.launch {
+            val corePhrases = DefaultDhikrs.list.map { it.transliteration } + "Allahu Akbar"
+            voiceManager.preloadPhrasesForOffline(voiceId, corePhrases)
+            _uiState.update {
+                it.copy(
+                    isPreloadingVoiceCache = false,
+                    cachedVoiceCount = voiceManager.getCachedClipCount()
+                )
+            }
         }
     }
 
     fun speakCurrentDhikr() {
         val dhikr = _uiState.value.currentDhikr
         voiceManager.speak(dhikr.transliteration.ifBlank { dhikr.arabic })
+        viewModelScope.launch {
+            delay(1500L)
+            _uiState.update { it.copy(cachedVoiceCount = voiceManager.getCachedClipCount()) }
+        }
     }
 
     override fun onCleared() {

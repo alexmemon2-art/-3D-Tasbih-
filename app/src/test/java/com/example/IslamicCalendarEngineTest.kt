@@ -1,12 +1,15 @@
 package com.example
 
+import com.example.audio.VoiceManager
 import com.example.calendar.GregorianDate
 import com.example.calendar.IslamicCalendarEngine
 import com.example.data.NightModeLogic
 import com.example.model.AsmaUlHusnaData
+import com.example.model.CustomPrayerTimesConfig
 import com.example.model.DailyBaatProvider
 import com.example.model.DhikrLevels
 import com.example.model.HajatAzkarData
+import com.example.model.LocationTimezoneConfig
 import com.example.model.MasnoonDuasData
 import com.example.model.NamazGuideData
 import com.example.model.SpecialDhikrsData
@@ -204,5 +207,59 @@ class IslamicCalendarEngineTest {
         assertTrue(!NightModeLogic.isEffectiveNightMode(autoEnabled = true, manualEnabled = false, hourOfDay = 12))
         assertTrue(NightModeLogic.isEffectiveNightMode(autoEnabled = false, manualEnabled = true, hourOfDay = 12))
         assertTrue(!NightModeLogic.isEffectiveNightMode(autoEnabled = false, manualEnabled = false, hourOfDay = 22))
+    }
+
+    @Test
+    fun formatMinutes12hAlwaysProduces12HourAmPmStrings() {
+        assertEquals("12:00 AM", IslamicCalendarEngine.formatMinutes12h(0))
+        assertEquals("5:15 AM", IslamicCalendarEngine.formatMinutes12h(5 * 60 + 15))
+        assertEquals("12:00 PM", IslamicCalendarEngine.formatMinutes12h(12 * 60))
+        assertEquals("4:45 PM", IslamicCalendarEngine.formatMinutes12h(16 * 60 + 45))
+        assertEquals("11:59 PM", IslamicCalendarEngine.formatMinutes12h(23 * 60 + 59))
+    }
+
+    @Test
+    fun liveLocationAndCustomTimezoneResolveCorrectly() {
+        val locConfig = LocationTimezoneConfig(
+            useLiveLocation = true,
+            liveLatitude = 21.4225,
+            liveLongitude = 39.8262,
+            liveCityName = "Makkah",
+            useCustomTimezone = true,
+            customTimezoneHours = 3.0
+        )
+        val resolved = IslamicCalendarEngine.resolveEffectiveCity("Hyderabad", locConfig)
+        assertEquals("Makkah", resolved.name)
+        assertEquals(21.4225, resolved.latitude, 0.0001)
+        assertEquals(39.8262, resolved.longitude, 0.0001)
+        assertEquals(3.0, resolved.timezoneHours, 0.0001)
+        assertEquals("UTC +03:00", IslamicCalendarEngine.formatTimezoneOffsetLabel(3.0))
+        assertEquals("UTC +05:30", IslamicCalendarEngine.formatTimezoneOffsetLabel(5.5))
+    }
+
+    @Test
+    fun customPrayerTimesOverrideOnlyConfiguredPrayersIn12HourFormat() {
+        val hyderabad = IslamicCalendarEngine.sindhCities.first { it.name == "Hyderabad" }
+        val base = IslamicCalendarEngine.computeDailyPrayerTimes(GregorianDate(2026, 6, 15), hyderabad, true)
+        val customConfig = CustomPrayerTimesConfig(
+            useCustomTimes = true,
+            fajrMinutes = 4 * 60 + 40, // 4:40 AM
+            ishaMinutes = 20 * 60 + 15 // 8:15 PM
+        )
+        val updated = IslamicCalendarEngine.applyCustomPrayerTimes(base, customConfig)
+        assertEquals("4:40 AM", updated.fajr)
+        assertEquals("8:15 PM", updated.isha)
+        assertEquals(base.zuhr, updated.zuhr)
+        assertEquals(base.maghrib, updated.maghrib)
+    }
+
+    @Test
+    fun voiceCacheFileNamesAreDeterministicAndDistinct() {
+        val a1 = VoiceManager.buildCacheFileName(VoiceManager.VOICE_ELEVEN_ADIL, "SubhanAllah")
+        val a2 = VoiceManager.buildCacheFileName(VoiceManager.VOICE_ELEVEN_ADIL, " subhanallah ")
+        val b1 = VoiceManager.buildCacheFileName(VoiceManager.VOICE_ELEVEN_SANA, "SubhanAllah")
+        assertEquals(a1, a2)
+        assertNotEquals(a1, b1)
+        assertTrue(a1.endsWith(".mp3"))
     }
 }

@@ -3,6 +3,8 @@ package com.example.ui.components
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,6 +32,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Sync
@@ -63,6 +66,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.location.LiveLocationHelper
 import com.example.model.AppSettings
 import com.example.model.BeadStyle
 import com.example.model.ClickSoundStyle
@@ -96,10 +100,26 @@ fun SettingsDialog(
     onOpenChallenges: () -> Unit = {},
     onOpenNightTimer: () -> Unit = {},
     onOpenVoiceSettings: () -> Unit = {},
+    onDetectLiveLocation: () -> Unit = {},
     onSaveSettings: (AppSettings) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    var hasLocationPermission by remember {
+        mutableStateOf(LiveLocationHelper.hasLocationPermission(context))
+    }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val granted = grants.values.any { it } || LiveLocationHelper.hasLocationPermission(context)
+        hasLocationPermission = granted
+        if (granted) {
+            Toast.makeText(context, "✅ Location Permission Enable Ho Gai!", Toast.LENGTH_SHORT).show()
+            onDetectLiveLocation()
+        } else {
+            Toast.makeText(context, "⚠️ Location permission denied", Toast.LENGTH_SHORT).show()
+        }
+    }
     var targetText by remember { mutableStateOf(settings.defaultTarget.toString()) }
     var dailyGoalText by remember { mutableStateOf(settings.dailyGoal.toString()) }
     var soundEnabled by remember { mutableStateOf(settings.soundEnabled) }
@@ -383,10 +403,45 @@ fun SettingsDialog(
                     testTag = "settings_voice_btn"
                 ) {
                     Text(
-                        text = "🎙️ Awaz Ka Intikhab (Voice & Speed)",
+                        text = "🎙️ Awaz Ka Intikhab (Online & Offline)",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = GoldBright
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Glass3DButton(
+                    onClick = {
+                        if (!hasLocationPermission) {
+                            locationPermissionLauncher.launch(LiveLocationHelper.REQUIRED_PERMISSIONS)
+                        } else {
+                            onDetectLiveLocation()
+                            Toast.makeText(context, "📍 Live Location Update Ho Rahi Hai...", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    isPrimaryGold = !hasLocationPermission,
+                    height = 46.dp,
+                    testTag = "settings_location_permission_btn"
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = "Location Permission",
+                        tint = if (!hasLocationPermission) EmeraldDeepDark else GoldBright,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (hasLocationPermission) {
+                            "📍 Live Location Enabled (Tap to Refresh GPS)"
+                        } else {
+                            "🔓 Enable Location Permission (Live GPS)"
+                        },
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (!hasLocationPermission) EmeraldDeepDark else GoldBright
                     )
                 }
 

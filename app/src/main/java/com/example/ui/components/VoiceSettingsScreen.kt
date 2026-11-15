@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -71,6 +72,10 @@ fun VoiceSettingsScreen(
     savedVoiceId: String,
     savedSpeed: Float,
     hasElevenLabsKey: Boolean,
+    isOnline: Boolean = false,
+    cachedVoiceCount: Int = 0,
+    isPreloadingCache: Boolean = false,
+    onPreloadOfflineVoices: (voiceId: String) -> Unit = {},
     onPreviewVoice: (voiceId: String, speed: Float) -> Unit,
     onStopVoice: () -> Unit,
     onSaveVoice: (voiceId: String, speed: Float) -> Unit,
@@ -166,12 +171,38 @@ fun VoiceSettingsScreen(
                             .testTag("tv_current_voice_card")
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                text = "✅ Current Selection",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = GoldLight
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "✅ Current Selection",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = GoldLight
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isOnline) Color(0x3310B981) else Color(0x33F59E0B)
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (isOnline) Color(0xFF34D399) else GoldBright,
+                                            CircleShape
+                                        )
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = if (isOnline) "🌐 Online • Cache: $cachedVoiceCount" else "📴 Offline • Cache: $cachedVoiceCount",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isOnline) Color(0xFF6EE7B7) else GoldBright
+                                    )
+                                }
+                            }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "${selectedVoiceOption.icon} ${selectedVoiceOption.name}",
@@ -185,13 +216,42 @@ fun VoiceSettingsScreen(
                                 color = IvoryText,
                                 modifier = Modifier.padding(top = 2.dp)
                             )
+                            Text(
+                                text = "🔊 Har awaz Online aur Offline dono par kaam karti hai — suni hui ElevenLabs awazein offline cache mein save ho jati hain aur bina internet offline TTS fallback bhi chalta hai.",
+                                fontSize = 11.sp,
+                                color = IvorySubtle,
+                                lineHeight = 15.sp,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
                             if (selectedVoiceOption.isOnline && !hasElevenLabsKey) {
                                 Text(
-                                    text = "ℹ️ Online ElevenLabs voice ke liye ELEVENLABS_API_KEY AI Studio Secrets panel mein add karein (tab tak Offline awaz fallback chalega).",
+                                    text = "ℹ️ ElevenLabs API key na hone par bhi Phone Ki Offline Awaz automatically play hogi.",
                                     fontSize = 11.sp,
                                     color = GoldLight,
-                                    modifier = Modifier.padding(top = 6.dp)
+                                    modifier = Modifier.padding(top = 4.dp)
                                 )
+                            }
+                            if (selectedVoiceOption.isOnline && hasElevenLabsKey && isOnline) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Glass3DButton(
+                                    onClick = { onPreloadOfflineVoices(draftVoiceId) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    isPrimaryGold = false,
+                                    enabled = !isPreloadingCache,
+                                    height = 42.dp,
+                                    testTag = "btn_preload_offline_voices"
+                                ) {
+                                    Text(
+                                        text = if (isPreloadingCache) {
+                                            "⏳ Core Azkar Offline Save Ho Rahe Hain..."
+                                        } else {
+                                            "📥 Core Azkar Offline Ke Liye Cache Karein"
+                                        },
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = GoldBright
+                                    )
+                                }
                             }
                         }
                     }

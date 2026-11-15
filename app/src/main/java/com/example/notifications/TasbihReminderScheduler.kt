@@ -31,12 +31,15 @@ object TasbihReminderScheduler {
 
     fun scheduleAll(context: Context, settings: ReminderSettings, cityName: String) {
         TasbihReminderReceiver.ensureChannels(context)
-        val city = IslamicCalendarEngine.sindhCities.find { it.name == cityName }
-            ?: IslamicCalendarEngine.sindhCities.first()
-        val prayerTimes = IslamicCalendarEngine.computeDailyPrayerTimes(
+        val prefs = TasbihPreferences(context)
+        val locationConfig = prefs.getLocationTimezoneConfig()
+        val customTimes = prefs.getCustomPrayerTimesConfig()
+        val city = IslamicCalendarEngine.resolveEffectiveCity(cityName, locationConfig)
+        val basePrayerTimes = IslamicCalendarEngine.computeDailyPrayerTimes(
             IslamicCalendarEngine.getTodayGregorian(),
             city
         )
+        val prayerTimes = IslamicCalendarEngine.applyCustomPrayerTimes(basePrayerTimes, customTimes)
 
         // Namaz ke baad Tasbih reminders (+12 mins after each Namaz start time)
         scheduleOrCancelDailyMinutes(

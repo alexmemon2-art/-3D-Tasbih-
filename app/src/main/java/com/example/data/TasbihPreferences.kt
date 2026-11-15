@@ -6,8 +6,10 @@ import com.example.model.AppSettings
 import com.example.model.BeadStyle
 import com.example.model.ClickSoundStyle
 import com.example.model.CompletionSoundStyle
+import com.example.model.CustomPrayerTimesConfig
 import com.example.model.DailyDayStat
 import com.example.model.Dhikr
+import com.example.model.LocationTimezoneConfig
 import com.example.model.ReminderSettings
 import com.example.model.HistoryItem
 import org.json.JSONArray
@@ -363,6 +365,54 @@ class TasbihPreferences(context: Context) {
         prefs.edit().putBoolean(KEY_MANUAL_NIGHT_ENABLED, enabled).apply()
     }
 
+    fun getLocationTimezoneConfig(): LocationTimezoneConfig {
+        val hasLat = prefs.contains(KEY_LIVE_LAT)
+        val hasLon = prefs.contains(KEY_LIVE_LON)
+        return LocationTimezoneConfig(
+            useLiveLocation = prefs.getBoolean(KEY_USE_LIVE_LOCATION, false),
+            liveLatitude = if (hasLat) prefs.getFloat(KEY_LIVE_LAT, 0f).toDouble() else null,
+            liveLongitude = if (hasLon) prefs.getFloat(KEY_LIVE_LON, 0f).toDouble() else null,
+            liveCityName = prefs.getString(KEY_LIVE_CITY_NAME, "") ?: "",
+            useCustomTimezone = prefs.getBoolean(KEY_USE_CUSTOM_TIMEZONE, false),
+            customTimezoneHours = prefs.getFloat(KEY_CUSTOM_TIMEZONE_HOURS, 5.0f).toDouble()
+        )
+    }
+
+    fun saveLocationTimezoneConfig(config: LocationTimezoneConfig) {
+        val editor = prefs.edit()
+            .putBoolean(KEY_USE_LIVE_LOCATION, config.useLiveLocation)
+            .putString(KEY_LIVE_CITY_NAME, config.liveCityName)
+            .putBoolean(KEY_USE_CUSTOM_TIMEZONE, config.useCustomTimezone)
+            .putFloat(KEY_CUSTOM_TIMEZONE_HOURS, config.customTimezoneHours.coerceIn(-12.0, 14.0).toFloat())
+        if (config.liveLatitude != null && config.liveLongitude != null) {
+            editor.putFloat(KEY_LIVE_LAT, config.liveLatitude.toFloat())
+                .putFloat(KEY_LIVE_LON, config.liveLongitude.toFloat())
+        }
+        editor.apply()
+    }
+
+    fun getCustomPrayerTimesConfig(): CustomPrayerTimesConfig {
+        return CustomPrayerTimesConfig(
+            useCustomTimes = prefs.getBoolean(KEY_USE_CUSTOM_PRAYER_TIMES, false),
+            fajrMinutes = prefs.getInt(KEY_CUSTOM_FAJR_MIN, -1).takeIf { it >= 0 },
+            zuhrMinutes = prefs.getInt(KEY_CUSTOM_ZUHR_MIN, -1).takeIf { it >= 0 },
+            asrMinutes = prefs.getInt(KEY_CUSTOM_ASR_MIN, -1).takeIf { it >= 0 },
+            maghribMinutes = prefs.getInt(KEY_CUSTOM_MAGHRIB_MIN, -1).takeIf { it >= 0 },
+            ishaMinutes = prefs.getInt(KEY_CUSTOM_ISHA_MIN, -1).takeIf { it >= 0 }
+        )
+    }
+
+    fun saveCustomPrayerTimesConfig(config: CustomPrayerTimesConfig) {
+        prefs.edit()
+            .putBoolean(KEY_USE_CUSTOM_PRAYER_TIMES, config.useCustomTimes)
+            .putInt(KEY_CUSTOM_FAJR_MIN, config.fajrMinutes ?: -1)
+            .putInt(KEY_CUSTOM_ZUHR_MIN, config.zuhrMinutes ?: -1)
+            .putInt(KEY_CUSTOM_ASR_MIN, config.asrMinutes ?: -1)
+            .putInt(KEY_CUSTOM_MAGHRIB_MIN, config.maghribMinutes ?: -1)
+            .putInt(KEY_CUSTOM_ISHA_MIN, config.ishaMinutes ?: -1)
+            .apply()
+    }
+
     companion object {
         private const val KEY_SAVED_DATE = "saved_date"
         private const val KEY_TODAY_COUNT = "today_count"
@@ -401,5 +451,17 @@ class TasbihPreferences(context: Context) {
         private const val KEY_HADEES_CHALLENGE_DATE = "hadees_challenge_date"
         private const val KEY_AUTO_NIGHT_ENABLED = "auto_night_enabled"
         private const val KEY_MANUAL_NIGHT_ENABLED = "manual_night_enabled"
+        private const val KEY_USE_LIVE_LOCATION = "use_live_location"
+        private const val KEY_LIVE_LAT = "live_latitude"
+        private const val KEY_LIVE_LON = "live_longitude"
+        private const val KEY_LIVE_CITY_NAME = "live_city_name"
+        private const val KEY_USE_CUSTOM_TIMEZONE = "use_custom_timezone"
+        private const val KEY_CUSTOM_TIMEZONE_HOURS = "custom_timezone_hours"
+        private const val KEY_USE_CUSTOM_PRAYER_TIMES = "use_custom_prayer_times"
+        private const val KEY_CUSTOM_FAJR_MIN = "custom_fajr_min"
+        private const val KEY_CUSTOM_ZUHR_MIN = "custom_zuhr_min"
+        private const val KEY_CUSTOM_ASR_MIN = "custom_asr_min"
+        private const val KEY_CUSTOM_MAGHRIB_MIN = "custom_maghrib_min"
+        private const val KEY_CUSTOM_ISHA_MIN = "custom_isha_min"
     }
 }

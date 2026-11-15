@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -41,6 +42,7 @@ import com.example.ui.theme.GoldLight
 @Composable
 fun TasbihHeader(
     settings: AppSettings,
+    isOnline: Boolean = false,
     onToggleSound: () -> Unit,
     onToggleVibration: () -> Unit,
     onToggleLock: () -> Unit,
@@ -86,13 +88,39 @@ fun TasbihHeader(
                 letterSpacing = 0.6.sp,
                 modifier = Modifier.testTag("header_title")
             )
-            Text(
-                text = "Allah Ka Zikr • سبحان الله",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = GoldLight.copy(alpha = 0.9f),
-                textAlign = TextAlign.Center
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Allah Ka Zikr • سبحان الله",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = GoldLight.copy(alpha = 0.9f),
+                    textAlign = TextAlign.Center
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(
+                            if (isOnline) Color(0x3310B981) else Color(0x33F59E0B)
+                        )
+                        .border(
+                            0.8.dp,
+                            if (isOnline) Color(0xFF34D399) else GoldBright.copy(alpha = 0.6f),
+                            CircleShape
+                        )
+                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                        .testTag("network_status_badge")
+                ) {
+                    Text(
+                        text = if (isOnline) "🌐 Online" else "📴 Offline Ready",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isOnline) Color(0xFF6EE7B7) else GoldBright
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 

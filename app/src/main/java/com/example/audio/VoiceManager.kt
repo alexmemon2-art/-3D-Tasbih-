@@ -8,6 +8,7 @@ import android.os.Build
 import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import com.example.BuildConfig
+import com.example.data.NetworkStatusHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,6 +21,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
+import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -28,17 +30,21 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
     private val appContext = context.applicationContext
     private val prefs: SharedPreferences =
         appContext.getSharedPreferences("voice_prefs", Context.MODE_PRIVATE)
+    private val cacheDirRoot: File = File(appContext.filesDir, "voice_cache").apply {
+        if (!exists()) mkdirs()
+    }
     private var systemTTS: TextToSpeech? = null
     private var mediaPlayer: MediaPlayer? = null
     @Volatile
     private var isTtsReady = false
+    private var pendingOfflineSpeak: Pair<String, Float>? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(25, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(12, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(12, TimeUnit.SECONDS)
             .build()
     }
 
@@ -49,6 +55,13 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
         private const val KEY_SELECTED_VOICE = "selected_voice"
         private const val KEY_SPEECH_SPEED = "speech_speed"
         private const val PLACEHOLDER_KEY = "YOUR_ELEVENLABS_API_KEY"
+
+        fun buildCacheFileName(voiceId: String, text: String): String {
+            val normalized = "${voiceId}_${text.trim().lowercase(Locale.US)}"
+            val digest = MessageDigest.getInstance("SHA-256").digest(normalized.toByteArray())
+            val hex = digest.joinToString("") { "%02x".format(it) }.take(24)
+            return "tts_$hex.mp3"
+        }
     }
 
     data class VoiceOption(
@@ -60,9 +73,27 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
     )
 
     val allVoices = listOf(
-        VoiceOption(VOICE_SYSTEM_TTS, "Phone Ki Awaz", "Offline • Har waqt available", "📳", false),
-        VoiceOption(VOICE_ELEVEN_ADIL, "Adil", "Deep & Calm Arabic • Internet Zaruri", "🕌", true),
-        VoiceOption(VOICE_ELEVEN_SANA, "Sana", "Soft & Honest Arabic • Internet Zaruri", "🌸", true)
+        VoiceOption(
+            VOICE_SYSTEM_TTS,
+            "Phone Ki Awaz",
+            "Offline • Har waqt available (No Internet)",
+            "📳",
+            false
+        ),
+        VoiceOption(
+            VOICE_ELEVEN_ADIL,
+            "Adil",
+            "Online + Offline Cache • Deep Calm Arabic",
+            "🕌",
+            true
+        ),
+        VoiceOption(
+            VOICE_ELEVEN_SANA,
+            "Sana",
+            "Online + Offline Cache • Soft Clear Arabic",
+            "🌸",
+            true
+        )
     )
 
     init {
@@ -100,22 +131,43 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
         return key.isNotEmpty() && key != PLACEHOLDER_KEY && key != "YOUR_API_KEY_HERE"
     }
 
+    fun getCachedClipCount(): Int {
+        return cacheDirRoot.listFiles { file ->
+            file.isFile && file.name.endsWith(".mp3") && file.length() > 0L
+        }?.size ?: 0
+    }
+
+    private fun getCachedAudioFile(voiceId: String, text: String): File {
+        return File(cacheDirRoot, buildCacheFileName(voiceId, text))
+    }
+
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             isTtsReady = true
             try {
-                val arResult = systemTTS?.setLanguage(Locale("ar"))
+                val arResult = systemTTS?.setLanguage(Locale.forLanguageTag("ar"))
                 if (arResult == TextToSpeech.LANG_MISSING_DATA || arResult == TextToSpeech.LANG_NOT_SUPPORTED) {
                     systemTTS?.setLanguage(Locale.ENGLISH)
                 }
                 systemTTS?.setPitch(1.0f)
                 systemTTS?.setSpeechRate(getSpeed())
+                pendingOfflineSpeak?.let { (pendingText, pendingSpeed) ->
+                    pendingOfflineSpeak = null
+                    speakOfflineTts(pendingText, pendingSpeed, null)
+                }
             } catch (_: Exception) {
                 isTtsReady = false
             }
         }
     }
 
+    /**
+     * Plays voice seamlessly both Online and Offline:
+     * 1. If offline phone voice is selected -> plays offline TTS directly.
+     * 2. If Adil/Sana is selected -> checks persistent offline MP3 cache first (works offline!).
+     * 3. If not cached and device is Online with ElevenLabs key -> fetches, caches to disk, and plays.
+     * 4. If Offline or API fails/missing -> falls back automatically to offline TTS without blocking.
+     */
     fun speak(
         text: String,
         overrideVoiceId: String? = null,
@@ -124,23 +176,56 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
     ) {
         val voiceId = overrideVoiceId ?: getSelectedVoiceId()
         val speed = (overrideSpeed ?: getSpeed()).coerceIn(0.5f, 2.0f)
+        val cleanText = text.ifBlank { "SubhanAllah" }
 
         val isOnlineVoice = voiceId == VOICE_ELEVEN_ADIL || voiceId == VOICE_ELEVEN_SANA
-        if (isOnlineVoice && hasConfiguredElevenLabsKey()) {
-            speakWithElevenLabs(text, voiceId, speed, onComplete)
+        if (!isOnlineVoice) {
+            speakOfflineTts(cleanText, speed, onComplete)
+            return
+        }
+
+        // 1. Check persistent offline cache first so previously heard phrases work offline too
+        val cachedFile = getCachedAudioFile(voiceId, cleanText)
+        if (cachedFile.exists() && cachedFile.length() > 0L) {
+            playMp3File(cachedFile, cleanText, speed, onComplete)
+            return
+        }
+
+        // 2. If online and API key configured -> fetch & cache permanently
+        val isOnline = NetworkStatusHelper.isOnline(appContext)
+        if (isOnline && hasConfiguredElevenLabsKey()) {
+            speakWithElevenLabs(cleanText, voiceId, speed, cachedFile, onComplete)
         } else {
-            if (isOnlineVoice && !hasConfiguredElevenLabsKey()) {
-                Toast.makeText(
-                    appContext,
-                    "ELEVENLABS_API_KEY Secrets panel mein set karein — Offline awaz chal rahi hai",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-            speakOfflineTts(text, speed, onComplete)
+            // 3. Offline fallback: play immediately with device offline TTS
+            speakOfflineTts(cleanText, speed, onComplete)
         }
     }
 
+    suspend fun preloadPhrasesForOffline(
+        voiceId: String,
+        phrases: List<String>
+    ): Int = withContext(Dispatchers.IO) {
+        if (!hasConfiguredElevenLabsKey() || !NetworkStatusHelper.isOnline(appContext)) {
+            return@withContext 0
+        }
+        val apiKey = BuildConfig.ELEVENLABS_API_KEY.trim()
+        var newlyCached = 0
+        for (phrase in phrases) {
+            val file = getCachedAudioFile(voiceId, phrase)
+            if (file.exists() && file.length() > 0L) continue
+            val bytes = fetchElevenLabsMp3(phrase, voiceId, apiKey)
+            if (bytes != null && bytes.isNotEmpty()) {
+                try {
+                    file.writeBytes(bytes)
+                    newlyCached++
+                } catch (_: Exception) {}
+            }
+        }
+        newlyCached
+    }
+
     private fun speakOfflineTts(text: String, speed: Float, onComplete: (() -> Unit)?) {
+        stopMediaPlayerOnly()
         if (isTtsReady && systemTTS != null) {
             try {
                 systemTTS?.setSpeechRate(speed)
@@ -149,7 +234,8 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
                 Toast.makeText(appContext, "❌ Awaz available nahi", Toast.LENGTH_SHORT).show()
             }
         } else {
-            Toast.makeText(appContext, "❌ Awaz available nahi", Toast.LENGTH_SHORT).show()
+            // Queue once while TextToSpeech finishes async engine initialization
+            pendingOfflineSpeak = text to speed
         }
         onComplete?.invoke()
     }
@@ -158,6 +244,7 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
         text: String,
         voiceId: String,
         speed: Float,
+        targetCacheFile: File,
         onComplete: (() -> Unit)?
     ) {
         scope.launch {
@@ -165,9 +252,21 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
                 fetchElevenLabsMp3(text, voiceId, BuildConfig.ELEVENLABS_API_KEY.trim())
             }
             if (audioBytes != null && audioBytes.isNotEmpty()) {
-                playMp3Bytes(audioBytes, speed, onComplete)
+                val cachedOk = withContext(Dispatchers.IO) {
+                    try {
+                        targetCacheFile.writeBytes(audioBytes)
+                        true
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+                if (cachedOk) {
+                    playMp3File(targetCacheFile, text, speed, onComplete)
+                } else {
+                    playMp3BytesTemp(audioBytes, text, speed, onComplete)
+                }
             } else {
-                Toast.makeText(appContext, "⚠️ Internet ya API key check karein — offline awaz chal rahi hai", Toast.LENGTH_SHORT).show()
+                // Seamless fallback to offline TTS on network hiccup
                 speakOfflineTts(text, speed, onComplete)
             }
         }
@@ -195,11 +294,14 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
-    private fun playMp3Bytes(bytes: ByteArray, speed: Float, onComplete: (() -> Unit)?) {
+    private fun playMp3File(
+        file: File,
+        fallbackText: String,
+        speed: Float,
+        onComplete: (() -> Unit)?
+    ) {
         try {
             stopMediaPlayerOnly()
-            val tempFile = File.createTempFile("eleven_tts_", ".mp3", appContext.cacheDir)
-            tempFile.writeBytes(bytes)
             val player = MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
@@ -207,7 +309,7 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build()
                 )
-                setDataSource(tempFile.absolutePath)
+                setDataSource(file.absolutePath)
                 prepare()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     try {
@@ -219,7 +321,6 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
                         mp.release()
                     } catch (_: Exception) {}
                     if (mediaPlayer === mp) mediaPlayer = null
-                    tempFile.delete()
                     onComplete?.invoke()
                 }
                 setOnErrorListener { mp, _, _ ->
@@ -227,15 +328,32 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
                         mp.release()
                     } catch (_: Exception) {}
                     if (mediaPlayer === mp) mediaPlayer = null
-                    tempFile.delete()
-                    onComplete?.invoke()
+                    speakOfflineTts(fallbackText, speed, onComplete)
                     true
                 }
                 start()
             }
             mediaPlayer = player
         } catch (_: Exception) {
-            speakOfflineTts("SubhanAllah", speed, onComplete)
+            speakOfflineTts(fallbackText, speed, onComplete)
+        }
+    }
+
+    private fun playMp3BytesTemp(
+        bytes: ByteArray,
+        fallbackText: String,
+        speed: Float,
+        onComplete: (() -> Unit)?
+    ) {
+        try {
+            val tempFile = File.createTempFile("eleven_tts_", ".mp3", appContext.cacheDir)
+            tempFile.writeBytes(bytes)
+            playMp3File(tempFile, fallbackText, speed) {
+                tempFile.delete()
+                onComplete?.invoke()
+            }
+        } catch (_: Exception) {
+            speakOfflineTts(fallbackText, speed, onComplete)
         }
     }
 
@@ -250,6 +368,7 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
     }
 
     fun stop() {
+        pendingOfflineSpeak = null
         try {
             systemTTS?.stop()
         } catch (_: Exception) {}
