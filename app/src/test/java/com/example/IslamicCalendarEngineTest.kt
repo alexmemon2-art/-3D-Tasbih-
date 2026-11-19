@@ -12,6 +12,7 @@ import com.example.model.HajatAzkarData
 import com.example.model.LocationTimezoneConfig
 import com.example.model.MasnoonDuasData
 import com.example.model.NamazGuideData
+import com.example.model.ShifaDuasData
 import com.example.model.SpecialDhikrsData
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -270,5 +271,22 @@ class IslamicCalendarEngineTest {
         val distinct = setOf(a1, b1, c1, d1, e1, f1)
         assertEquals(6, distinct.size)
         assertTrue(distinct.all { it.endsWith(".mp3") })
+    }
+
+    @Test
+    fun shifaDuasCollectionIsPopulatedAndValid() {
+        assertEquals(4, ShifaDuasData.allDuas.size)
+        assertEquals(listOf(1, 2, 3, 4), ShifaDuasData.allDuas.map { it.id })
+        assertTrue(
+            ShifaDuasData.allDuas.all {
+                it.title.isNotBlank() &&
+                    it.arabic.isNotBlank() &&
+                    it.transliteration.isNotBlank() &&
+                    it.urdu.isNotBlank() &&
+                    it.count.isNotBlank() &&
+                    it.reference.isNotBlank() &&
+                    it.targetCount > 0
+            }
+        )
     }
 }

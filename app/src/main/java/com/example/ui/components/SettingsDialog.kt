@@ -100,6 +100,7 @@ fun SettingsDialog(
     onOpenChallenges: () -> Unit = {},
     onOpenNightTimer: () -> Unit = {},
     onOpenVoiceSettings: () -> Unit = {},
+    onOpenShifaDuas: () -> Unit = {},
     onDetectLiveLocation: () -> Unit = {},
     onSaveSettings: (AppSettings) -> Unit,
     onDismiss: () -> Unit
@@ -282,6 +283,23 @@ fun SettingsDialog(
                 ) {
                     Text(
                         text = "🤲 Masnoon Duas Collection",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = GoldBright
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Glass3DButton(
+                    onClick = onOpenShifaDuas,
+                    modifier = Modifier.fillMaxWidth(),
+                    isPrimaryGold = false,
+                    height = 46.dp,
+                    testTag = "settings_shifa_duas_btn"
+                ) {
+                    Text(
+                        text = "🩺 بیماریوں کے لیے دعائیں (Shifa Duas)",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = GoldBright

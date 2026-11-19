@@ -23,6 +23,7 @@ import com.example.model.HistoryItem
 import com.example.model.LocationTimezoneConfig
 import com.example.model.MasnoonDua
 import com.example.model.ReminderSettings
+import com.example.model.ShifaDua
 import com.example.model.SpecialDhikr
 import com.example.model.SpecialDhikrsData
 import com.example.notifications.TasbihReminderScheduler
@@ -52,7 +53,8 @@ enum class SubScreen {
     NAMAZ_GUIDE,
     CHALLENGES,
     NIGHT_TIMER,
-    VOICE_SETTINGS
+    VOICE_SETTINGS,
+    SHIFA_DUAS
 }
 
 data class TasbihUiState(
@@ -414,6 +416,30 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update {
             it.copy(
                 currentDhikr = hajatDhikr,
+                count = 0,
+                activeSubScreen = null
+            )
+        }
+        TasbihWidgetUpdater.updateAllWidgets(getApplication())
+    }
+
+    fun selectShifaDuaAsDhikr(dua: ShifaDua) {
+        val shifaId = "shifa_dua_${dua.id}"
+        val shifaDhikr = Dhikr(
+            id = shifaId,
+            arabic = dua.arabic,
+            transliteration = dua.title,
+            meaning = dua.urdu,
+            target = dua.targetCount.coerceIn(1, 10000),
+            isCustom = false,
+            fazilat = "${dua.transliteration} • ${dua.count}",
+            reference = dua.reference
+        )
+        prefs.saveActiveDhikrId(shifaId)
+        prefs.saveCurrentSessionDhikrCount(0)
+        _uiState.update {
+            it.copy(
+                currentDhikr = shifaDhikr,
                 count = 0,
                 activeSubScreen = null
             )
@@ -911,7 +937,11 @@ class TasbihViewModel(application: Application) : AndroidViewModel(application) 
 
     fun speakCurrentDhikr() {
         val dhikr = _uiState.value.currentDhikr
-        voiceManager.speak(dhikr.transliteration.ifBlank { dhikr.arabic })
+        speakText(dhikr.transliteration.ifBlank { dhikr.arabic })
+    }
+
+    fun speakText(text: String) {
+        voiceManager.speak(text)
         viewModelScope.launch {
             delay(1500L)
             _uiState.update { it.copy(cachedVoiceCount = voiceManager.getCachedClipCount()) }

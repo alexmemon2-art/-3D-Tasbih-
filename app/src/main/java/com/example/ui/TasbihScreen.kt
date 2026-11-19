@@ -77,6 +77,7 @@ import com.example.ui.components.NamazGuideScreen
 import com.example.ui.components.NightModeTimerScreen
 import com.example.ui.components.PrayerQiblaScreen
 import com.example.ui.components.SettingsDialog
+import com.example.ui.components.ShifaDuasScreen
 import com.example.ui.components.SpecialDhikrScreen
 import com.example.ui.components.StartSplashScreen
 import com.example.ui.components.StatsCards
@@ -141,6 +142,7 @@ fun TasbihScreen(
         uiState.activeSubScreen == SubScreen.CHALLENGES -> ScreenMode.CHALLENGES
         uiState.activeSubScreen == SubScreen.NIGHT_TIMER -> ScreenMode.NIGHT_TIMER
         uiState.activeSubScreen == SubScreen.VOICE_SETTINGS -> ScreenMode.VOICE_SETTINGS
+        uiState.activeSubScreen == SubScreen.SHIFA_DUAS -> ScreenMode.SHIFA_DUAS
         uiState.showCalendarScreen -> ScreenMode.CALENDAR
         uiState.showStartingScreen -> ScreenMode.STARTING
         else -> ScreenMode.MAIN
@@ -317,6 +319,14 @@ fun TasbihScreen(
                     onBack = { viewModel.closeSubScreen() }
                 )
             }
+            ScreenMode.SHIFA_DUAS -> {
+                ShifaDuasScreen(
+                    wallpaperIndex = uiState.wallpaperIndex,
+                    onSpeakDua = { viewModel.speakText(it.transliteration.ifBlank { it.arabic }) },
+                    onReciteAsTasbih = { viewModel.selectShifaDuaAsDhikr(it) },
+                    onBack = { viewModel.closeSubScreen() }
+                )
+            }
             ScreenMode.EXIT -> {
                 ExitConfirmScreen(
                     sessionCount = uiState.sessionCount,
@@ -463,6 +473,7 @@ fun TasbihScreen(
                                     onOpenChallenges = { viewModel.openSubScreen(SubScreen.CHALLENGES) },
                                     onOpenNightTimer = { viewModel.openSubScreen(SubScreen.NIGHT_TIMER) },
                                     onOpenVoiceSettings = { viewModel.openSubScreen(SubScreen.VOICE_SETTINGS) },
+                                    onOpenShifaDuas = { viewModel.openSubScreen(SubScreen.SHIFA_DUAS) },
                                     onOpenSettings = { viewModel.showSettings(true) },
                                     modifier = Modifier.padding(horizontal = 16.dp)
                                 )
@@ -559,6 +570,7 @@ fun TasbihScreen(
                             onOpenChallenges = { viewModel.openSubScreen(SubScreen.CHALLENGES) },
                             onOpenNightTimer = { viewModel.openSubScreen(SubScreen.NIGHT_TIMER) },
                             onOpenVoiceSettings = { viewModel.openSubScreen(SubScreen.VOICE_SETTINGS) },
+                            onOpenShifaDuas = { viewModel.openSubScreen(SubScreen.SHIFA_DUAS) },
                             onDetectLiveLocation = { viewModel.detectAndSaveLiveLocation() },
                             onSaveSettings = { viewModel.updateSettings(it) },
                             onDismiss = { viewModel.showSettings(false) }
@@ -602,6 +614,7 @@ private fun IslamicToolsHubCard(
     onOpenChallenges: () -> Unit,
     onOpenNightTimer: () -> Unit,
     onOpenVoiceSettings: () -> Unit,
+    onOpenShifaDuas: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -817,6 +830,21 @@ private fun IslamicToolsHubCard(
                     Text("⚙️ Settings", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GoldBright)
                 }
             }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                com.example.ui.components.Glass3DButton(
+                    onClick = onOpenShifaDuas,
+                    modifier = Modifier.fillMaxWidth(),
+                    isPrimaryGold = true,
+                    shape = RoundedCornerShape(18.dp),
+                    testTag = "hub_shifa_duas_button"
+                ) {
+                    Text("🩺 بیماریوں کے لیے دعائیں (Shifa Duas)", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = EmeraldDeepDark)
+                }
+            }
         }
     }
 }
@@ -961,5 +989,6 @@ private enum class ScreenMode {
     CHALLENGES,
     NIGHT_TIMER,
     VOICE_SETTINGS,
+    SHIFA_DUAS,
     EXIT
 }
