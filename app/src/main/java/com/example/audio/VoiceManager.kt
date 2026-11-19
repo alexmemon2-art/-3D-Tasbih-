@@ -52,6 +52,10 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
         const val VOICE_SYSTEM_TTS = "system_tts"
         const val VOICE_ELEVEN_ADIL = "zkCGJHfZ7LHDgElbSPyO"
         const val VOICE_ELEVEN_SANA = "mRdG9GYEjJmIzqbYTidv"
+        const val VOICE_ELEVEN_SPECIAL = "UT6USLtoAlXHj5k4sOLY"
+        const val VOICE_ELEVEN_CUSTOM_HA0 = "hA0RyxVmITMttngSpcOF"
+        const val VOICE_ELEVEN_CUSTOM_O85 = "o85TqPN3F4P7dWae2paA"
+        const val VOICE_ELEVEN_CUSTOM_PWN = "pWnnC09aJXL5Wmv6kiRS"
         private const val KEY_SELECTED_VOICE = "selected_voice"
         private const val KEY_SPEECH_SPEED = "speech_speed"
         private const val PLACEHOLDER_KEY = "YOUR_ELEVENLABS_API_KEY"
@@ -93,6 +97,34 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
             "Online + Offline Cache • Soft Clear Arabic",
             "🌸",
             true
+        ),
+        VoiceOption(
+            VOICE_ELEVEN_SPECIAL,
+            "Special Voice (UT6USL)",
+            "Online + Offline Cache • Custom ElevenLabs Voice",
+            "🎧",
+            true
+        ),
+        VoiceOption(
+            VOICE_ELEVEN_CUSTOM_HA0,
+            "Custom Voice (hA0Ryx)",
+            "Online + Offline Cache • Custom ElevenLabs Voice",
+            "🎙️",
+            true
+        ),
+        VoiceOption(
+            VOICE_ELEVEN_CUSTOM_O85,
+            "Custom Voice (o85TqP)",
+            "Online + Offline Cache • Custom ElevenLabs Voice",
+            "✨",
+            true
+        ),
+        VoiceOption(
+            VOICE_ELEVEN_CUSTOM_PWN,
+            "Custom Voice (pWnnC0)",
+            "Online + Offline Cache • Custom ElevenLabs Voice",
+            "🌙",
+            true
         )
     )
 
@@ -104,8 +136,11 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
-    fun getSelectedVoiceId(): String =
-        prefs.getString(KEY_SELECTED_VOICE, VOICE_SYSTEM_TTS) ?: VOICE_SYSTEM_TTS
+    fun getSelectedVoiceId(): String {
+        val saved = prefs.getString(KEY_SELECTED_VOICE, null)
+        if (saved != null && allVoices.any { it.id == saved }) return saved
+        return if (hasConfiguredElevenLabsKey()) VOICE_ELEVEN_SPECIAL else VOICE_SYSTEM_TTS
+    }
 
     fun setSelectedVoice(voiceId: String) {
         val valid = if (allVoices.any { it.id == voiceId }) voiceId else VOICE_SYSTEM_TTS
@@ -178,7 +213,7 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
         val speed = (overrideSpeed ?: getSpeed()).coerceIn(0.5f, 2.0f)
         val cleanText = text.ifBlank { "SubhanAllah" }
 
-        val isOnlineVoice = voiceId == VOICE_ELEVEN_ADIL || voiceId == VOICE_ELEVEN_SANA
+        val isOnlineVoice = allVoices.any { it.id == voiceId && it.isOnline }
         if (!isOnlineVoice) {
             speakOfflineTts(cleanText, speed, onComplete)
             return
